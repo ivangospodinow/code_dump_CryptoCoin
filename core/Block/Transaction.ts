@@ -2,7 +2,14 @@ import Block from "./Block";
 import TransactionInput from "./TransactionInput";
 import TransactionOutput from "./TransactionOutput";
 
-export type TransactionConstructor = { num: number, name: string, blockName?: string, inputs?: Array<TransactionInput>, outputs?: Array<TransactionOutput>, block?: Block };
+export type TransactionConstructor = {
+    num: number,
+    name: string,
+    blockName?: string,
+    inputs?: Array<TransactionInput>,
+    outputs?: Array<TransactionOutput>,
+    block?: Block
+};
 
 export default class Transaction {
 

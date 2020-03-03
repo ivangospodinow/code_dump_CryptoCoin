@@ -1,5 +1,8 @@
 import StorageInterface from "./StorageInterface";
 import settings from '../../settings';
+import StorageHandle from "./StorageHandle";
+
+export const DATA_REMOVE_VALUE = 'REMOVE_VALUE';
 
 export default class Storage {
     public storage: StorageInterface;
@@ -46,6 +49,13 @@ export default class Storage {
 
     delete = (key: string) => {
 
+    }
+
+    /**
+     * @example: address.nameoftheaddress.%
+     */
+    seek = (namespace: string, expression : string) : StorageHandle => {
+        return new StorageHandle(this.storage, namespace, expression);
     }
 
 }

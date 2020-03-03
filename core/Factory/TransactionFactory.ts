@@ -31,4 +31,27 @@ export default class TransactionFactory {
             }),
         });
     }
+
+    createArrayFromObject = (transaction: Transaction) => {
+        return {
+            name: transaction.name,
+            num: transaction.num,
+            blockName: transaction.block?.name,
+            inputs: transaction.inputs.map(function createArrayFromObjectMapInput(input : TransactionInput) {
+                return {
+                    num: input.num,
+                    outputNum: input.outputNum,
+                    transactionName: input.transactionName,
+                    script: input.script
+                };
+            }),
+            outputs: transaction.outputs.map(function createArrayFromObjectMapOutput(output : TransactionOutput) {
+                return {
+                    num: output.num,
+                    value: output.value,
+                    script: output.script
+                };
+            }),
+        };
+    }
 }

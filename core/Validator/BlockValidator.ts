@@ -94,21 +94,42 @@ export default class BlockValidator {
         /**
          * Coinbase input
          */
-        if (input.num === 0 && input.transaction.isCoinbase() && input.getValue() !== settings.BLOCK_REWARD) {
-            console.error('Invalid reward for coinbase');
+        if (input.num === 0 && input.transaction.isCoinbase()) {
+            if (input.getValue() !== settings.BLOCK_REWARD) {
+                console.error('Invalid reward for coinbase');
+                return false;
+            }
+            if (parseInt(String(input.script).substr(0, String(input.transaction.block?.height).length)) !== input.transaction.block?.height) {
+                console.error('Reward transaction needs to include block num as a start');
+                return false;
+            }
+
+            return  true;
+        }
+
+        if (!input.utxo) {
+            console.error('utxo is required for non coinbase inputs');
             return false;
         }
 
-        // @TODO more checks here
-        return true;
+        if (addressVerify(input.utxo.createSignValue(), input.getSign(), input.utxo.getScriptAddress())) {
+            return true;
+        }
+
+        return false;
     }
 
     isOutputValid = (output: TransactionOutput): boolean => {
         if (output.transaction.isCoinbase()) {
             return this.isOutputValidatorValid(output);
         }
-        console.error('isOutputValid needs to be implemented');
-        return false;
+        if (!output.getScriptAddress().length) {
+            console.error('Output PPK is required');
+            return false;
+        }
+        // console.error('isOutputValid needs to be implemented');
+
+        return true;
     }
 
     isOutputValidatorValid = (output: TransactionOutput): boolean => {

@@ -12,13 +12,12 @@ export default class TransactionInputFactory {
     }
 
     createFromObject = (object: TransactionInputConstructor): TransactionInput => {
-
         return new TransactionInput({
-            num : object['num'],
-            outputNum : object['outputNum'] || undefined,
-            transactionName : object['transactionName'] || '',
-            script : object['script'],
-            transaction : object['transaction'] || undefined,
+            num: object['num'],
+            outputNum: object['outputNum'],
+            transactionName: object['transactionName'] || '',
+            script: object['script'],
+            transaction: object['transaction'] || undefined,
         });
     }
 }

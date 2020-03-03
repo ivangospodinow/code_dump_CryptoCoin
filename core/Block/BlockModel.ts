@@ -5,7 +5,8 @@ import Transaction from "./Transaction";
 import TransactionInput from "./TransactionInput";
 import TransactionOutput from "./TransactionOutput";
 import settings from '../../settings';
-import { formatAmount, sha256x2, stringToWeight, calcualteMultiplier } from "../tools";
+import { formatAmount, sha256x2, stringToWeight, calcualteMultiplier, getTimestampString } from "../tools";
+import Utxo from "./Utxo";
 
 export default class BlockModel {
     protected storage: StorageInterface;
@@ -14,7 +15,7 @@ export default class BlockModel {
         this.storage = storage;
     }
 
-    createCandidate = (address: Address, prevBlock : Block): Block => {
+    createCandidate = (address: Address, prevBlock: Block): Block => {
 
         const block = new Block({
             status: 'valid-fork',
@@ -22,7 +23,8 @@ export default class BlockModel {
             weight: 0,
             chainWeight: 0,
             name: '',
-            prevBlockName: prevBlock.name
+            prevBlockName: prevBlock.name,
+            timestamp: getTimestampString()
         });
 
         block.transactions.push(this.createRewardTransaction(address, block))
@@ -41,6 +43,12 @@ export default class BlockModel {
         }
 
         block.transactions[0].setName(this.createTransactionName(block.transactions[0]));
+
+        let counter: number = 0;
+        for (let t in block.transactions) {
+            block.transactions[t].num = counter++;
+        }
+
         block.setName(this.createBlockName(block));
         block.setWeight(this.calculateWeight(block));
 
@@ -50,20 +58,64 @@ export default class BlockModel {
     }
 
     createRewardTransaction = (address: Address, block: Block): Transaction => {
-        const transaction =  new Transaction({
-            block : block,
-            name : '',
-            num : 0,
+        const transaction = new Transaction({
+            block: block,
+            name: '',
+            num: 0,
         });
 
         transaction.inputs.push(new TransactionInput({
             num: 0,
             script: block.height,
-            transaction : transaction,
+            transaction: transaction,
         }));
-        
+
         transaction.outputs.push(this.createSignedOutput(address, transaction));
 
+        return transaction;
+    }
+
+    createPayToAddressTransaction = (from: Address, to: Address, utxos: Array<Utxo>, amount: number) => {
+        const transaction = new Transaction({
+            num: 0,
+            name: '',
+        });
+        let utxoValue = 0;
+
+        transaction.inputs = utxos.map(function createTransactionMapInputs(utxo: Utxo, num: number): TransactionInput {
+            utxoValue += utxo.value;
+            return new TransactionInput({
+                num,
+                outputNum: utxo.outputNum,
+                transactionName: utxo.transactionName,
+                script: 'SIGN ' + from.sign(utxo.createSignValue()),
+                transaction,
+                utxo,
+            });
+        })
+
+        transaction.outputs.push(new TransactionOutput({
+            num: 0,
+            value: amount,
+            script: 'PPK ' + to.getPublic(),
+            transaction
+        }));
+
+        if (amount > utxoValue) {
+            console.error('new transaction value is bigger than requested');
+            return false;
+        }
+
+        if (utxoValue - amount > 0) {
+            transaction.outputs.push(new TransactionOutput({
+                num: 1,
+                value: formatAmount(utxoValue - amount),
+                script: 'PPK ' + from.getPublic(),
+                transaction
+            }));
+        }
+
+        transaction.name = this.createTransactionName(transaction);
         return transaction;
     }
 
@@ -93,7 +145,7 @@ export default class BlockModel {
         for (let i = 0; i <= block.transactions.length - 1; i++) {
             base.push(block.transactions[i].name);
         }
-
+        base.push(block.timestamp);
         return sha256x2(base.join(''));
     }
 

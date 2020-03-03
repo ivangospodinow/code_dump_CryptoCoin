@@ -1,7 +1,11 @@
 import Storage from "../Storage/Storage";
-import Block from "../Block/Block";
+import Block, { BlockConstructor } from "../Block/Block";
 import settings from '../../settings';
 import { json } from "../tools";
+import Transaction from "../Block/Transaction";
+import TransactionFactory from "./TransactionFactory";
+
+const TRANSACTION_FACTORY = new TransactionFactory;
 
 export default class BlockFactory {
 
@@ -9,7 +13,7 @@ export default class BlockFactory {
         return this.createFromObject(json(input))
     }
 
-    createFromObject = (object: { status?: string, height?: number, weight?: number, chainWeight?: number, name?: string, prevBlockName?: string, transactions? : Array<string> }): Block => {
+    createFromObject = (object: BlockConstructor): Block => {
         return new Block({
             status: object['status'] || '',
             height: object['height'] || 0,
@@ -17,7 +21,24 @@ export default class BlockFactory {
             chainWeight: object['chainWeight'] || 0,
             name: object['name'] || '',
             prevBlockName: object['prevBlockName'] || '',
-            transactionsNames : object['transactions'] || [],
+            timestamp: object['timestamp'] || '',
+            transactionsNames: object['transactionsNames'] || [],
         });
+    }
+
+    createArrayFromObject = (block: Block) => {
+        return {
+            height: block.height,
+            status: block.status,
+            name: block.name,
+            prevBlockName: block.prevBlockName,
+            weight: block.weight,
+            chainWeight: block.chainWeight,
+            difficulty: block.difficulty,
+            nonce: block.nonce,
+            transctions: block.transactions.map(function createArrayFromObjectMapTransactions(transaction: Transaction) {
+                return TRANSACTION_FACTORY.createArrayFromObject(transaction);
+            }),
+        };
     }
 }

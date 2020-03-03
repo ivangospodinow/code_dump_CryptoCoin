@@ -36,15 +36,25 @@ export function calcualteMultiplier(prevBlockWeight: number, scriptWeight: numbe
     return 1;
 }
 
-export function json(string : string)
-{
+export function json(string: string) {
     if (string.substr(0, 1) === '{') {
         return JSON.parse(string);
     }
     return {};
 }
 
-export function numbersEqual(a : number, b: number)
-{
+export function numbersEqual(a: number, b: number) {
     return a.toFixed(settings.COIN_DECIMALS) === b.toFixed(settings.COIN_DECIMALS);
+}
+
+export function paddBlockHeight(height: number): string {
+    return String(height).padStart(10, '0');
+}
+
+export function getTimestampString(): string {
+    return (new Date()).toISOString();
+}
+
+export function getSecondsBetweenDates(start: string, end: string): number {
+    return ((new Date(start)).getTime() - (new Date(end)).getTime()) / 1000;
 }
