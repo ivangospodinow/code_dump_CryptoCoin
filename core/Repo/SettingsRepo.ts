@@ -17,6 +17,22 @@ export default class SettingsRepo {
         return this.getSetting(settings.LAST_BLOCK_NAME_KEY);
     }
 
+    getLastBlockHeight = (): Promise<number> => {
+        return new Promise(async function getLastBlockHeightPromise(this: SettingsRepo, resolve: CallableFunction, reject: any) {
+            this.getSetting(settings.LAST_BLOCK_HEIGHT_KEY).then((result: string) => {
+                resolve(parseInt(result) > 0 ? parseInt(result)  : 0);
+            }).catch(reject);
+        }.bind(this));
+    }
+
+    isMiningEnabled = (): Promise<boolean> => {
+        return new Promise(async function getLastBlockHeightPromise(this: SettingsRepo, resolve: CallableFunction, reject: any) {
+            this.getSetting(settings.MINING_ENABLED_KEY).then((result: string) => {
+                resolve(result === 'yes');
+            }).catch(reject);
+        }.bind(this));
+    }
+
     getSetting = (name: string): Promise<string> => {
         return this.storage.get(NAMESPACE, name);
     }
@@ -29,7 +45,9 @@ export default class SettingsRepo {
         return new Promise(async function getPeersPromise(this: SettingsRepo, resolve: CallableFunction, reject: any) {
             this.getSetting(settings.PEERS_KEY).then((result: string) => {
                 resolve(PEERS_FACTORY.createFromString(result));
-            }).catch(reject);
+            }).catch(() => {
+                resolve(PEERS_FACTORY.createFromString('{"peers":[]}'));
+            });
         }.bind(this));
     }
 }

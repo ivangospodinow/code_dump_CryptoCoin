@@ -2,7 +2,7 @@ import Storage from "../Storage/Storage";
 import Block, { BlockConstructor } from "../Block/Block";
 import settings from '../../settings';
 import { json } from "../tools";
-import Transaction from "../Block/Transaction";
+import Transaction, { TransactionConstructor } from "../Block/Transaction";
 import TransactionFactory from "./TransactionFactory";
 
 const TRANSACTION_FACTORY = new TransactionFactory;
@@ -20,9 +20,15 @@ export default class BlockFactory {
             weight: object['weight'] || 0,
             chainWeight: object['chainWeight'] || 0,
             name: object['name'] || '',
+            target: object['target'] || '',
+            nonce: object['nonce'] || '',
+            workDone : object['workDone'] || 0,
             prevBlockName: object['prevBlockName'] || '',
             timestamp: object['timestamp'] || '',
             transactionsNames: object['transactionsNames'] || [],
+            transactions: (object.transactions || []).map(function createTransactionFromObject(transaction: TransactionConstructor) {
+                return TRANSACTION_FACTORY.createFromObject(transaction);
+            }),
         });
     }
 
@@ -34,11 +40,17 @@ export default class BlockFactory {
             prevBlockName: block.prevBlockName,
             weight: block.weight,
             chainWeight: block.chainWeight,
-            difficulty: block.difficulty,
+            target: block.target,
             nonce: block.nonce,
-            transctions: block.transactions.map(function createArrayFromObjectMapTransactions(transaction: Transaction) {
+            workDone : block.workDone,
+            timestamp: block.timestamp,
+            transactions: block.transactions.map(function createArrayFromObjectMapTransactions(transaction: Transaction) {
                 return TRANSACTION_FACTORY.createArrayFromObject(transaction);
             }),
         };
+    }
+
+    createStringFromObject = (block: Block) : string => {
+        return JSON.stringify(this.createArrayFromObject(block));
     }
 }

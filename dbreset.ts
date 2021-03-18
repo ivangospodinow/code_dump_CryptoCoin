@@ -1,33 +1,10 @@
 import Storage from './core/Storage/Storage';
 import MysqlStorage from './core/Storage/MysqlStorage';
 import settings from './settings';
-import BlockModel from './core/Block/BlockModel';
-import Address from './core/Address/Address';
-import BlockRepo from './core/Repo/BlockRepo';
 import SettingsRepo from './core/Repo/SettingsRepo';
-import MiningService from './core/Service/MiningService';
-import Block from './core/Block/Block';
-import BlockValidator from './core/Validator/BlockValidator';
-import TransactionRepo from './core/Repo/TransactionRepo';
-import AddressService from './core/Service/AddressService';
-import UtxoRepo from './core/Repo/UtxoRepo';
-import PoolRepo from './core/Repo/PoolRepo';
-
-const mysqlstorage = new MysqlStorage(settings.mysql);
-const storage = new Storage(mysqlstorage);
-
-const address = new Address(settings['addresses'][0]['public'], settings['addresses'][0]['private']);
-const address2 = new Address(settings['addresses'][1]['public'], settings['addresses'][1]['private']);
-
-const transactionRepo = new TransactionRepo(storage);
-
-const blockModel = new BlockModel(storage);
-const blockRepo = new BlockRepo(storage, transactionRepo);
-
-const settingsRepo = new SettingsRepo(storage);
-const utxoRepo = new UtxoRepo(storage, transactionRepo);
-const poolRepo = new PoolRepo(storage, transactionRepo, utxoRepo);
-const mining = new MiningService(settingsRepo, blockModel, blockRepo, poolRepo);
+import { address1, miningService, blockRepo, storage, settingsRepo, mysqlStorage } from './globals';
+import { MineResult } from './core/Service/MiningService';
+import { getTimestampString } from './core/tools';
 
 const namespaces = [
     'block',
@@ -35,27 +12,36 @@ const namespaces = [
     'setting',
     'transaction',
     'utxo',
+    'queue',
 ];
 
-(async function() {
-    const sql = namespaces.map((name) => {
-        return "TRUNCATE `" + name + "`";
-    }).join(";\n");
-    mysqlstorage.connection.query(sql, [], function queryCallback(error: any, result: any) {
+const sql = namespaces.map((name) => {
+    return "TRUNCATE `" + name + "`";
+}).join(";\n");
 
-        settingsRepo.setSetting(settings.PEERS_KEY, {
-            peers : [{ip : '192.168.0.3', port: 4421}]
-        });
+mysqlStorage.connection.query(sql, [], async function queryCallback(error: any, result: any) {
 
-        mining.createNextBlock(address).then((block) => {
-            mining.mine(block).then((result : {difficulty : number, nonce : string}) => {
-                block.difficulty = result['difficulty'];
-                block.nonce = result['nonce'];
-                blockRepo.persist(block).then(() => {
-                    console.log('Chain reset done')
-                    process.exit();
-                });
-            });
-        });
+    const peers = settings.nodes.filter(ndpair => ndpair['port'] !== settings.SERVER_PORT).map((portPair) => {
+        return { ip: '192.168.0.3', port: portPair['port'] };
     });
-})();
+
+    await settingsRepo.setSetting(settings.PEERS_KEY, { peers: peers });
+    // await settingsRepo.setSetting(settings.MINING_ENABLED_KEY, settings.NODE === 0 ? 'yes' : 'no');
+    await settingsRepo.setSetting(settings.MINING_ENABLED_KEY, 'yes');
+
+    console.log('storage resetted')
+
+    const block = await miningService.createNextBlock(address1);
+    miningService.mine(block).then(async function blockMinedSuccess(resultResult: MineResult) {
+        block.target = resultResult['target'];
+        block.nonce = resultResult['nonce'];
+        block.timestamp = getTimestampString();
+
+        await blockRepo.addBlock(block, { chainHeight: 0 });
+        console.log('done')
+        process.exit();
+
+    });
+});
+
+

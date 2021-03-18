@@ -58,3 +58,19 @@ export function getTimestampString(): string {
 export function getSecondsBetweenDates(start: string, end: string): number {
     return ((new Date(start)).getTime() - (new Date(end)).getTime()) / 1000;
 }
+
+export function isNumber(variable: any): boolean {
+    return !isNaN(variable);
+}
+export function nanoTime() {
+    const hrTime = process.hrtime();
+    return hrTime[0] * 1000000000 + hrTime[1];
+}
+
+export function numberToHex(number: number): number {
+    return '0x' + (number).toString(16);
+}
+
+export function unixTime(): number {
+    return new Date().getTime() / 1000;
+}

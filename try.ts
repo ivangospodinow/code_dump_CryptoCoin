@@ -1,138 +1,145 @@
-// var EC = require('elliptic').ec;
-// var ec = new EC('secp256k1');
+import { blockRepo, settingsRepo } from "./globals";
+import Block from "./core/Block/Block";
 
-// // Generate keys
-// var key = ec.genKeyPair();
-
-// console.log(key, key.getPublic().encode('hex'))
-
-import Storage from './core/Storage/Storage';
-import MysqlStorage from './core/Storage/MysqlStorage';
-import settings from './settings';
-import { rand, sha256x2 } from './core/tools';
-import BlockModel from './core/Block/BlockModel';
-import Address from './core/Address/Address';
-import BlockRepo from './core/Repo/BlockRepo';
-import SettingsRepo from './core/Repo/SettingsRepo';
-import MiningService from './core/Service/MiningService';
-import Block from './core/Block/Block';
-import BlockValidator from './core/Validator/BlockValidator';
-import TransactionRepo from './core/Repo/TransactionRepo';
-import AddressService from './core/Service/AddressService';
-import UtxoRepo from './core/Repo/UtxoRepo';
-import PoolRepo from './core/Repo/PoolRepo';
-const cryptoRandomString = require('crypto-random-string');
-
-const storage = new Storage(new MysqlStorage(settings.mysql));
-
-const address = new Address(settings['addresses'][0]['public'], settings['addresses'][0]['private']);
-const address2 = new Address(settings['addresses'][1]['public'], settings['addresses'][1]['private']);
-
-const transactionRepo = new TransactionRepo(storage);
-
-const blockModel = new BlockModel(storage);
-const blockRepo = new BlockRepo(storage, transactionRepo);
-
-// let block = blockModel.createCandidate(address);
-// block = blockModel.prepareCandidate(block);
+(async function () {
+    let chainHeight = await settingsRepo.getLastBlockHeight();
+    let block = await blockRepo.getBlockByHeight(chainHeight);
+    console.log(block.height)
+    while (true) {
+        block = await blockRepo.getBlockByName(block.prevBlockName);
+        // console.log(block);
+        // break
+        console.log(block.height)
+        if (block.height <= 1) {
+            break
+        }
+    }
+})();
 
 
-// console.log(block)
+/**
+OK - Check syntactic correctness
+OK - Reject if duplicate of block we have in any of the three categories
+OK - Transaction list must be non-empty
+OK - Block hash must satisfy claimed nBits proof of work
+NOT - Block timestamp must not be more than two hours in the future
+OK - First transaction must be coinbase (i.e. only 1 input, with hash=0, n=-1), the rest must not be
+OK - For each transaction, apply "tx" checks 2-4
+OK - For the coinbase (first) transaction, scriptSig length must be 2-100
+NOT - Reject if sum of transaction sig opcounts > MAX_BLOCK_SIGOPS
+NOT - Verify Merkle hash
+TODO - Check if prev block (matching prev hash) is in main branch or side branches. If not, add this to orphan blocks, then query peer we got this from for 1st missing orphan block in prev chain; done with block
+OK - Check that nBits value matches the difficulty rules
+??? - Reject if timestamp is the median time of the last 11 blocks or before
+NOT - For certain old blocks (i.e. on initial block download) check that hash matches known values
 
-const settingsRepo = new SettingsRepo(storage);
-const utxoRepo = new UtxoRepo(storage, transactionRepo);
-const poolRepo = new PoolRepo(storage, transactionRepo, utxoRepo);
-const mining = new MiningService(settingsRepo, blockModel, blockRepo, poolRepo);
-const validator = new BlockValidator(blockModel, blockRepo);
 
-const addressService = new AddressService(settingsRepo, blockRepo);
+Add block into the tree. There are three cases: 
+    1. block further extends the main branch;
+    2. block extends a side branch but does not add enough difficulty to make it become the new main branch;
+    3. block extends a side branch and makes it the new main branch.
+ 
+
+ For case 1, adding to main branch:
+
+    For all but the coinbase transaction, apply the following:
+        
+        OK - For each input, look in the main branch to find the referenced output transaction. Reject if the output transaction is missing for any input.
+        
+        For each input, if we are using the nth output of the earlier transaction, but it has fewer than n+1 outputs, reject.
+        For each input, if the referenced output transaction is coinbase (i.e. only 1 input, with hash=0, n=-1), it must have at least COINBASE_MATURITY (100) confirmations; else reject.
+        Verify crypto signatures for each input; reject if any are bad
+        For each input, if the referenced output has already been spent by a transaction in the main branch, reject
+        Using the referenced output transactions to get input values, check that each input value, as well as the sum, are in legal money range
+        Reject if the sum of input values < sum of output values
+    Reject if coinbase value > sum of block creation fee and transaction fees
+    (If we have not rejected):
+    For each transaction, "Add to wallet if mine"
+    For each transaction in the block, delete any matching transaction from the transaction pool
+    Relay block to our peers
+    If we rejected, the block is not counted as part of the main branch
+
+For case 2, adding to a side branch, we don't do anything.
+For case 3, a side branch becoming the main branch:
+
+    Find the fork block on the main branch which this side branch forks off of
+    Redefine the main branch to only go up to this fork block
+    For each block on the side branch, from the child of the fork block to the leaf, add to the main branch:
+        Do "branch" checks 3-11
+        For all but the coinbase transaction, apply the following:
+            For each input, look in the main branch to find the referenced output transaction. Reject if the output transaction is missing for any input.
+            For each input, if we are using the nth output of the earlier transaction, but it has fewer than n+1 outputs, reject.
+            For each input, if the referenced output transaction is coinbase (i.e. only 1 input, with hash=0, n=-1), it must have at least COINBASE_MATURITY (100) confirmations; else reject.
+            Verify crypto signatures for each input; reject if any are bad
+            For each input, if the referenced output has already been spent by a transaction in the main branch, reject
+            Using the referenced output transactions to get input values, check that each input value, as well as the sum, are in legal money range
+            Reject if the sum of input values < sum of output values
+        Reject if coinbase value > sum of block creation fee and transaction fees
+        (If we have not rejected):
+        For each transaction, "Add to wallet if mine"
+    If we reject at any point, leave the main branch as what it was originally, done with block
+    For each block in the old main branch, from the leaf down to the child of the fork block:
+        For each non-coinbase transaction in the block:
+            Apply "tx" checks 2-9, except in step 8, only look in the transaction pool for duplicates, not the main branch
+            Add to transaction pool if accepted, else go on to next transaction
+    For each block in the new main branch, from the child of the fork node to the leaf:
+        For each transaction in the block, delete any matching transaction from the transaction pool
+    Relay block to our peers
+
+For each orphan block for which this block is its prev, run all these steps (including this one) recursively on that orphan
+*/
+
+
+
+
+console.log((2).toString())
+
+
+
+
+
+
+
+
+
 
 
 // const bcrypt = require('bcrypt');
+// const converter = require('hex2dec');
+// const bs58 = require('bs58')
 
-// let hashed = '';
-// function nextHash() {
-//     bcrypt.genSalt(5, function(err, salt) {
-//         bcrypt.hash('45036c5304cc511c95d88bcf6b039a25d429b48ce820cad2fd11f0bcdf9cdb2e', salt, function(err, hash) {
-//             hashed = sha256x2(hash);
-//             console.log(salt + ' ' + hash + ' ' + hashed);
-//             if (hashed.substr(0, 4) !== '0000') {
-//                 nextHash();
+// import { buf2hex, hexdump } from './core/tools';
+// import settings from './settings';
+// import { sha256x2 } from './core/tools';
+
+// let mineBase = sha256x2('0007b5c9977bd505c4f1409a9dec3b35e02d4e477874e90bc3cdf08d7fa07885' + '0007b5c9977bd505c4f1409a9dec3b35e02d4e477874e90bc3cdf08d7fa07885');
+// const target = '0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff' / 20;
+// function mine() {
+//     bcrypt.genSalt(settings.BCRYPT_SALT_SIZE, function (err: any, salt: string) {
+
+//         bcrypt.hash(mineBase, salt, function (err: any, hash: string) {
+//             if (parseInt(sha256x2(hash), 16) <= target) {
+//                 console.log(salt)
+//                 return;
 //             }
+
+//             // mine();
 //         });
 //     });
 // }
-// nextHash();
+// mine();
+// // console.log(parseInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff', 16));
+// // // console.log('0x' + (Buffer.from(sha256x2('test'), 'ascii').toString('hex')+0x10000).toString(16).substr(-4).toUpperCase())
+// // console.log('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'/ 2)
 
+// // console.log('2.7433500304463812e+153' / '0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff');
+// console.log(parseInt('0x00000000ffff0000000000000000000000000000000000000000000000000000', 16));
 
-// var salt = '$2b$10$Wk7rE6JGjPKlMOMhgLKTtO';
-// bcrypt.hash('45036c5304cc511c95d88bcf6b039a25d429b48ce820cad2fd11f0bcdf9cdb2e', salt, function(err, hash) {
-//     console.log(salt + ' ' + hash + ' ' + sha256x2(hash));
-// });
+// // let hex = Buffer.from('0007b5c9977bd505c4f1409a9dec3b35e02d4e477874e90bc3cdf08d7fa07885', 'utf8').toString('hex');
 
+// // console.log(hex);
+// // console.log(parseInt(hex, 16));
 
-// utxoRepo.getOutputsForValue(address, 5).then((utxos) => {
-//     let transaction = blockModel.createPayToAddressTransaction(address, address2, utxos, 4.512312);
-//     if (transaction) {
-//         poolRepo.persist(transaction);
-//     }
-// });
+// // // console.log('30303037623563393937376264353035633466313430396139646563336233356530326434653437373837346539306263336364663038643766613037383835'.length)
 
-
-// createArrayFromObject
-
-// blockRepo.getBlockByHeight(1).then((block : Block) => {
-//     blockRepo.loadFullBlock(block).then((block) => {
-
-//         console.log(validator.isBlockValid(block));
-//     }).catch(error => console.error(error));
-    
-// });
-// console.log('START');
-// function donextblock() {
-//     mining.createNextBlock(address).finally(donextblock);
-// }
-
-// donextblock();
-// console.log('here')
-// mining.createNextBlock(address).then((block) => {
-//     blockRepo.persist(block);
-//     console.log('Block')
-//     // mining.mine(block).then((result) => {
-//     //     console.log(result)
-//     // });
-// });
-
-
-// setTimeout(() => {
-//     mining.createNextBlock(address);
-// }, 100);
-
-// console.log('here')
-// setInterval(() => {
-//     mining.createNextBlock(address);
-// }, 10);
-
-
-// console.log(settingsRepo.getLastBlockName());
-
-// const repo = new BlockRepo(storage);
-// repo.persist(block);
-
-
-
-
-
-// console.log(blockModel)
-
-// const BC = require('./core/Block');
-
-// var insert = function() {
-//     storage.put(
-//         cryptoRandomString({ length: rand(50, 120) }),
-//         cryptoRandomString({ length: rand(1024, 2048) }),
-//         insert
-//     );
-// }
-// insert();
-
+// // // console.log(Buffer.from('0007b5c9977bd505c4f1409a9dec3b35e02d4e477874e90bc3cdf08d7fa07885', 'hex'))

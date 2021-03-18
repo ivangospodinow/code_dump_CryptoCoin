@@ -11,6 +11,18 @@ export default class Storage {
         this.storage = storage;
     }
 
+    has = (namespace: string, key: string): Promise<boolean> => {
+        return new Promise(function hasPromise(this: Storage, resolve: CallableFunction, reject: CallableFunction) {
+            this.storage.has(namespace, key, function storageGetCallback(result: any, error: any) {
+                if (error) {
+                    reject(error);
+                } else {
+                    resolve(result);
+                }
+            });
+        }.bind(this));
+    }
+
     get = (namespace: string, key: string): Promise<string> => {
         return new Promise(function getPromise(this: Storage, resolve: CallableFunction, reject: CallableFunction) {
             this.storage.get(namespace, key, function storageGetCallback(result: any, error: any) {

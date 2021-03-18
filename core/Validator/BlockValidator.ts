@@ -13,11 +13,9 @@ import { numbersEqual } from "../tools";
 
 export default class BlockValidator {
     blockModel: BlockModel;
-    blockRepo: BlockRepo;
 
-    constructor(blockModel: BlockModel, blockRepo: BlockRepo) {
+    constructor(blockModel: BlockModel) {
         this.blockModel = blockModel;
-        this.blockRepo = blockRepo;
     }
 
     isBlockValid = (block: Block): boolean => {
@@ -85,7 +83,7 @@ export default class BlockValidator {
             console.error('Input and Output values does not match');
             return false;
         }
-        
+
         return true;
     }
 
@@ -104,7 +102,7 @@ export default class BlockValidator {
                 return false;
             }
 
-            return  true;
+            return true;
         }
 
         if (!input.utxo) {
@@ -120,6 +118,11 @@ export default class BlockValidator {
     }
 
     isOutputValid = (output: TransactionOutput): boolean => {
+        if (!this.isValueInValidRange(output.getValue())) {
+            console.error('Output value is not correct');
+            return false;
+        }
+
         if (output.transaction.isCoinbase()) {
             return this.isOutputValidatorValid(output);
         }
@@ -138,5 +141,18 @@ export default class BlockValidator {
             return false;
         }
         return true;
+    }
+
+    isValueInValidRange = (value: number) => {
+        if (isNaN(value)) {
+            console.error('value ' + value + ' is not an number');
+            return false;
+        }
+
+        const string = String(value);
+        if (string.indexOf('.') === -1) {
+            return true;
+        }
+        return string.split('.')[1].length === settings.COIN_DECIMALS;
     }
 }

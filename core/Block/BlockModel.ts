@@ -1,6 +1,6 @@
 import StorageInterface from "../Storage/StorageInterface";
 import Address from "../Address/Address";
-import Block from "./Block";
+import Block, { BLOCK_STATUS_VALID_FORK } from "./Block";
 import Transaction from "./Transaction";
 import TransactionInput from "./TransactionInput";
 import TransactionOutput from "./TransactionOutput";
@@ -18,13 +18,13 @@ export default class BlockModel {
     createCandidate = (address: Address, prevBlock: Block): Block => {
 
         const block = new Block({
-            status: 'valid-fork',
+            status: BLOCK_STATUS_VALID_FORK,
             height: prevBlock.height + 1,
             weight: 0,
             chainWeight: 0,
             name: '',
             prevBlockName: prevBlock.name,
-            timestamp: getTimestampString()
+            
         });
 
         block.transactions.push(this.createRewardTransaction(address, block))
@@ -145,7 +145,8 @@ export default class BlockModel {
         for (let i = 0; i <= block.transactions.length - 1; i++) {
             base.push(block.transactions[i].name);
         }
-        base.push(block.timestamp);
+        // dont use it!
+        // base.push(block.timestamp);
         return sha256x2(base.join(''));
     }
 

@@ -12,6 +12,15 @@ export default class MysqlStorage extends StorageInterface {
         this.connection = mysql.createConnection({ ...settings, multipleStatements: true, });
     }
 
+    has = (namespace: string, key: string, callback: StorageCallback) => {
+        this.connection.query(
+            "SELECT EXISTS(SELECT `value` FROM `" + namespace + "` WHERE `key` = ?) AS `exists`",
+            [key],
+            function queryPutCallback(error: any, result: any) {
+                callback(undefined !== result[0] ? result[0]['exists'] > 0 : '', error);
+            });
+    }
+
     get = (namespace: string, key: string, callback: StorageCallback) => {
         this.connection.query(
             "SELECT `value` FROM `" + namespace + "` WHERE `key` = ?",
