@@ -20,6 +20,8 @@ const http = require('http');
 const querystring = require('querystring');
 import axios from 'axios';
 import EventsManager from "../Events/EventManager";
+import ChainRepo from "../Repo/ChainRepo";
+import { resolve } from "path";
 
 export type SyncTarget = { height: number, peer: PeerConstructor };
 
@@ -32,13 +34,11 @@ export default class ClientService {
     queueService: QueueService;
     miningService: MiningService;
     eventsManager: EventsManager;
+    chainRepo: ChainRepo;
 
     peers: Peers;
 
-    blocksToPersists: Array<{ block: Block, callback?: CallableFunction }> = [];
-
     private hasFullSync: boolean = false;
-    private lastBlocKAddedTime: number = 0;
 
     constructor(
         settingsRepo: SettingsRepo,
@@ -48,7 +48,8 @@ export default class ClientService {
         blockValidator: BlockValidator,
         queueService: QueueService,
         miningService: MiningService,
-        eventsManager: EventsManager
+        eventsManager: EventsManager,
+        chainRepo: ChainRepo
     ) {
         this.settingsRepo = settingsRepo;
         this.blockModel = blockModel;
@@ -58,11 +59,7 @@ export default class ClientService {
         this.queueService = queueService;
         this.miningService = miningService;
         this.eventsManager = eventsManager;
-
-        this.eventsManager.on('blockAdded', function blockAddedEventCallback(this: ClientService, _: Block) {
-            this.lastBlocKAddedTime = unixTime();
-
-        }.bind(this));
+        this.chainRepo = chainRepo;
     }
 
     isSynced(): boolean {
@@ -72,182 +69,166 @@ export default class ClientService {
     /**
      * Thinkgs to do 
      * 1. Sync the node
-     * 2. Mine
+     * 2. check for new blocks
+     * 3. Mine
      */
     start = (): boolean => {
+        // @TODO peers management
+
         this.settingsRepo.getPeers().then(function setPeers(this: ClientService, peers: Peers) {
+            console.log('Peers loaded', peers.getAll())
             this.hasFullSync = true;
             this.peers = peers;
 
             this.ensureSync().then(function clientSynced(this: ClientService) {
                 console.log('------Client synced--------');
-                this.lastBlocKAddedTime = unixTime();
 
-                // console.log('------Start periodic pull------');
-                // this.startPeriodicBlockPull();
-                console.log('------Start block process------');
-                this.startBlockQueueProcess();
+                console.log('------Start periodic pull------');
+                this.startPeriodicBlockPull();
+                // console.log('------Start block process------');
+                // this.startBlockQueueProcess();
                 console.log('------Mining started--------');
                 this.startMining();
 
-            }.bind(this));
 
+                // @TODO mining adter sync ?
+
+
+            }.bind(this));
 
         }.bind(this));
 
+        // this.startMining();
+
         return true;
-    }
-
-    pushBlockToQueue = (block: Block, callback?: CallableFunction) => {
-        if (!this.blocksToPersists.filter(pair => pair.block.name === block.name).length) {
-            // console.log('Push to queue ' + block.name)
-            this.blocksToPersists.push({ block, callback });
-        }
-    }
-
-    startBlockQueueProcess = () => {
-        const blockProcessLoopTimeout = 10;
-        let pair: { block: Block, callback?: CallableFunction } | undefined;
-        let blockProcessLoop: CallableFunction;
-        blockProcessLoop = async function (this: ClientService) {
-            pair = this.blocksToPersists.pop();
-            if (pair) {
-                this.blockRepo.validateAndAddBlock(
-                    pair.block,
-                    await this.miningService.getMinedResult(pair.block)
-                ).then(function validateAndAddBlockSuccess(added: boolean) {
-                    // console.log('Block added ' + added)
-                    setTimeout(blockProcessLoop, blockProcessLoopTimeout);
-                    if (pair && pair.callback) {
-                        pair.callback(added);
-                    }
-                    // console.log('startBlockQueueProcess PROCESSING ENDED')
-                }).catch(function validateAndAddBlockFail() {
-                    setTimeout(blockProcessLoop, blockProcessLoopTimeout);
-                });
-            } else {
-                setTimeout(blockProcessLoop, blockProcessLoopTimeout);
-            }
-            return true;
-        }.bind(this);
-        blockProcessLoop();
     }
 
     startPeriodicBlockPull = () => {
         let processing: boolean = false;
         let cleintHeight: number;
-        let block: Block | undefined;
+        let blocks: Array<Block> | undefined;
 
         setInterval(async function periodicBlockPull(this: ClientService) {
-            if (processing || this.lastBlocKAddedTime + settings.TARGET_BLOKC_TIME_SEC * 4 > unixTime()) {
+            if (processing) {
                 return false;
             }
             processing = true;
 
             cleintHeight = await this.settingsRepo.getLastBlockHeight();
             // console.log('REQUESTING BLOCK ' +( cleintHeight + 1))
-            block = await this.getBlock(cleintHeight + 1);
-            if (block) {
-                this.pushBlockToQueue(block);
+            blocks = await this.getBlocks(cleintHeight + 1);
+            if (blocks) {
+                await this.chainRepo.validateAndAddBlocks(blocks);
             }
 
             processing = false;
             return true;
-        }.bind(this), settings.TARGET_BLOKC_TIME_SEC * 1000);
+        }.bind(this), settings.TARGET_BLOKC_TIME_SEC * 1000 / 2);
     }
 
     startMining = () => {
         (function miner(this: ClientService) {
             let block: Block;
+            let added: bool = false;
             const minerLoop = async function (this: ClientService) {
                 if (await this.settingsRepo.getSetting(settings.MINING_ENABLED_KEY) !== 'yes') {
                     return false;
                 }
+
+                console.log('Mining started')
                 /**
                  * @TODO Fix address
                  */
                 block = await this.miningService.createNextBlock(TMP_MINING_ADDRESS);
-                this.miningService.mine(block).then(async function blockMinedSuccess(this: ClientService, resultResult: MineResult) {
+                console.log('Block candidate ', block.height, block.name)
+                this.miningService.mine(block, TMP_MINING_ADDRESS).then(async function blockMinedSuccess(this: ClientService, resultResult: MineResult) {
                     // if (block.height <= await this.settingsRepo.getLastBlockHeight()) {
                     //     return minerLoop();
                     // }
 
                     block.target = resultResult['target'];
                     block.nonce = resultResult['nonce'];
+                    block.hash = resultResult['hash'];
+                    block.weight = resultResult['weight'];
+                    block.chainWeight += block.weight;
+                    console.log('Block mined, pushing to chain', block.height, block.name)
 
-                    this.pushBlockToQueue(block, (added: boolean) => {
-                        if (added) {
-                            // console.log('Mined ' + block.height + ' target ' + block.target);
-                            this.propagateBlock(block, function propagateToAtLeastOne() {
-                                minerLoop();
-                            });
-                        }
-                    });
+                    added = await this.chainRepo.addBlock(block);
+                    console.log('Block persisted ', added)
+                    if (added) {
+                        this.propagateBlock(block);
+                    }
+
+                    setTimeout(minerLoop, 1);
+
                     return true;
                 }.bind(this)).catch(function blockMinedFail() {
-                    minerLoop();
+                    setTimeout(minerLoop, 1);
                 });
             }.bind(this);
 
-            minerLoop();
+            setTimeout(minerLoop, 1);
         }.bind(this))();
     }
 
     ensureSync = () => {
         return new Promise(async function ensureSyncPromise(this: ClientService, resolve: CallableFunction, reject: any) {
-            let synced: number = 1;
-            while (synced > 0) {
+            let synced: boolean = true;
+            // 
+            console.log('ensure sync')
+
+            while (synced) {
                 synced = await this.sync();
             }
+
             return resolve(true);
         }.bind(this));
     }
 
     /**
      * @TODO 3 nodes in pair, one is ahaed, how to sync ?
+     * @TODO side chain sync back
      */
-    sync = (): Promise<number> => {
+    sync = (): Promise<boolean> => {
         // console.log('Syncing')
         return new Promise(async function syncPromise(this: ClientService, resolve: CallableFunction, reject: any) {
 
-            let newtworkTarget: SyncTarget = await this.ensureSyncTarget();
-            if (newtworkTarget.height <= 1) {
-                return resolve(0);
+            let newtworkTarget: SyncTarget | undefined = await this.ensureSyncTarget();
+            if (!newtworkTarget) {
+                return resolve(false);
             }
-            console.log('Newtwork target ' + newtworkTarget.height);
+
             let cleintHeight = await this.settingsRepo.getLastBlockHeight();
             if (cleintHeight >= newtworkTarget.height) {
-                return resolve(0);
+                return resolve(false);
             }
 
-            let block: Block | undefined;
-            let blockPersisted: boolean;
-            let blocksSyncked: number = 0;
-
+            let blocks: Array<Block> | undefined;
             // sync it
             while (cleintHeight < newtworkTarget.height) {
-                block = await this.getBlockFromPeer(newtworkTarget.peer, cleintHeight + 1);
-                if (block) {
-                    blockPersisted = await this.blockRepo.validateAndAddBlock(
-                        block,
-                        await this.miningService.getMinedResult(block)
-                    );
-                    if (blockPersisted) {
-                        blocksSyncked++;
-                        cleintHeight++;
-                    }
+                console.log(cleintHeight)
+                console.log('Request block ', cleintHeight + 1)
+                blocks = await this.getBlocksFromPeer(newtworkTarget.peer, cleintHeight + 1);
+                if (blocks) {
+                    let debug = await this.chainRepo.validateAndAddBlocks(blocks);
+                    console.log('blocks added', debug)
+                    cleintHeight = await this.settingsRepo.getLastBlockHeight();
+
                 }
             }
-            return resolve(blocksSyncked);
+            return resolve(true);
         }.bind(this));
     }
 
-    ensureSyncTarget = (): Promise<SyncTarget> => {
+    ensureSyncTarget = (): Promise<SyncTarget | undefined> => {
         return new Promise(async function ensureSyncTargetPromise(this: ClientService, resolve: CallableFunction, reject: any) {
-            let newtworkTarget: SyncTarget | false = false;
+            let newtworkTarget: SyncTarget | undefined;
+            let timeout = false;
+            setTimeout(() => timeout = true, 10 * 1000);
             while (true) {
                 newtworkTarget = await this.getSyncTarget();
-                if (newtworkTarget !== false) {
+                console.log('network target', newtworkTarget)
+                if (newtworkTarget || timeout) {
                     break;
                 }
             }
@@ -255,7 +236,7 @@ export default class ClientService {
         }.bind(this));
     }
 
-    getSyncTarget = (): Promise<SyncTarget | false> => {
+    getSyncTarget = (): Promise<SyncTarget | undefined> => {
         return new Promise(async function getSyncTargetPromise(this: ClientService, resolve: CallableFunction, reject: any) {
 
             const promises: Array<Promise<boolean>> = [];
@@ -279,22 +260,22 @@ export default class ClientService {
             }.bind(this));
 
             Promise.all(promises).then(() => {
-                resolve(queried > 0 ? { height: targetHeight, peer: targetPeer } : false);
+                resolve(queried > 0 ? { height: targetHeight, peer: targetPeer } : undefined);
             }).catch(() => {
-                resolve(queried > 0 ? { height: targetHeight, peer: targetPeer } : false);
+                resolve(queried > 0 ? { height: targetHeight, peer: targetPeer } : undefined);
             });
         }.bind(this));
     }
 
-    getBlock = (height: number): Promise<Block | undefined> => {
-        return this.getBlockFromPeer(this.peers.getOne(), height);
+    getBlocks = (height: number): Promise<Array<Block> | undefined> => {
+        return this.getBlocksFromPeer(this.peers.getOne(), height);
     }
 
-    getBlockFromPeer = (peer: PeerConstructor, height: number): Promise<Block | undefined> => {
+    getBlocksFromPeer = (peer: PeerConstructor, height: number): Promise<Array<Block> | undefined> => {
         return new Promise(function getBlockPromise(this: ClientService, resolve: CallableFunction, reject: any) {
-            this.request(peer, { action: 'getBlock', height }).then(function getBlockRequest(data: BlockConstructor) {
-                if (undefined !== data['height'] && data['height'] === height) {
-                    return resolve(BLOCK_FACTORY.createFromObject(data));
+            this.request(peer, { action: 'getBlocks', height }).then(function getBlockRequest(data: { blocks: Array<BlockConstructor> }) {
+                if (undefined !== data['blocks']) {
+                    resolve(data['blocks'].map(blockData => BLOCK_FACTORY.createFromObject(blockData)));
                 } else {
                     return resolve(undefined);
                 }
@@ -313,6 +294,14 @@ export default class ClientService {
 
     }
 
+    /**
+     * @TODO refactor with Promise.all
+     * 
+     * @param query
+     * @param data 
+     * @param callback 
+     * @returns 
+     */
     propagate = (query: { action: string }, data: Object, callback?: CallableFunction): Promise<boolean> => {
         return new Promise(function propagatePromise(this: ClientService, resolve: CallableFunction, reject: any) {
 
@@ -367,6 +356,7 @@ export default class ClientService {
 
     request = (peer: PeerConstructor, query: { action: string }, data?: {}): Promise<Object> => {
         return new Promise(function requestPromise(this: ClientService, resolve: CallableFunction, reject: any) {
+            // console.log('Request ' + 'http://' + peer.ip + ':' + peer.port + '?' + querystring.stringify(query))
             axios({
                 method: data ? 'post' : 'get',
                 url: 'http://' + peer.ip + ':' + peer.port + '?' + querystring.stringify(query),
@@ -375,8 +365,11 @@ export default class ClientService {
                     'Content-Type': 'application/json',
                 },
             }).then(function requestReponse(response: { data?: Object }) {
+                // console.log(response.data)
                 resolve(response.data || {});
             }, function requestError(error) {
+                // console.log(error);
+                // process.exit();
                 reject(error);
             });
         }.bind(this));

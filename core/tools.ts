@@ -37,7 +37,7 @@ export function calcualteMultiplier(prevBlockWeight: number, scriptWeight: numbe
 }
 
 export function json(string: string) {
-    if (string.substr(0, 1) === '{') {
+    if (string.substr(0, 1) === '{' || string.substr(0, 1) === '[') {
         return JSON.parse(string);
     }
     return {};

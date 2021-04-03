@@ -17,30 +17,38 @@ import QueueRepo from './core/Repo/QueueRepo';
 import QueueService from './core/Service/QueueService';
 import Address from './core/Address/Address';
 import EventsManager from './core/Events/EventManager';
+import ChainRepo from './core/Repo/ChainRepo';
 
 export const eventsManager = new EventsManager;
 export const mysqlStorage = new MysqlStorage(settings.mysql);
 export const storage = new Storage(mysqlStorage);
+export const settingsRepo = new SettingsRepo(storage);
+
 
 export const transactionRepo = new TransactionRepo(storage);
 
-export const settingsRepo = new SettingsRepo(storage);
+
 export const queueService = new QueueService;
 export const blockModel = new BlockModel(storage);
 export const validator = new BlockValidator(blockModel);
 
+
 export const utxoRepo = new UtxoRepo(storage, transactionRepo);
 
-export const blockRepo = new BlockRepo(storage, transactionRepo, settingsRepo, eventsManager, validator, utxoRepo);
+export const blockRepo = new BlockRepo(storage, transactionRepo, settingsRepo, eventsManager, validator, utxoRepo); 0
 export const queueRepo = new QueueRepo(storage);
+export const chainRepo = new ChainRepo(storage, settingsRepo, validator, blockRepo, eventsManager);
 
 
 export const poolRepo = new PoolRepo(storage, transactionRepo, utxoRepo);
 
-export const mining = new MiningService(settingsRepo, blockModel, blockRepo, poolRepo, eventsManager);
+export const mining = new MiningService(settingsRepo, blockModel, blockRepo, poolRepo, eventsManager, chainRepo);
+// @TODO fix coupling 
+chainRepo.setMiningService(mining);
+
 export const miningService = mining;
-export const clientService = new ClientService(settingsRepo, blockModel, blockRepo, poolRepo, validator, queueService, mining, eventsManager);
-export const apiService = new ApiService(clientService, settingsRepo, blockModel, blockRepo, poolRepo, validator);
+export const clientService = new ClientService(settingsRepo, blockModel, blockRepo, poolRepo, validator, queueService, mining, eventsManager, chainRepo);
+export const apiService = new ApiService(clientService, settingsRepo, blockModel, blockRepo, poolRepo, validator, chainRepo);
 
 
 

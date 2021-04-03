@@ -1,5 +1,6 @@
 import Transaction from "./Transaction";
 import settings from "../../settings";
+import Address from "../Address/Address";
 
 export type BlockConstructor = {
     status: string,
@@ -7,7 +8,7 @@ export type BlockConstructor = {
     weight: number,
     target?: number,
     nonce?: string,
-    workDone? : number,
+    hash?: number,
     chainWeight: number,
     name: string,
     prevBlockName: string,
@@ -29,7 +30,7 @@ export default class Block {
     public chainWeight: number;
     public target: number;
     public nonce: string;
-    public workDone: number;
+    public hash: number;
     public name: string;
     public prevBlockName: string = '';
     public timestamp: string;
@@ -44,7 +45,7 @@ export default class Block {
         this.chainWeight = data['chainWeight'];
         this.target = data['target'] || 1;
         this.nonce = data['nonce'] || '';
-        this.workDone = data['workDone'] || 0;
+        this.hash = data['hash'] || 0;
         this.name = data['name'];
         this.prevBlockName = data['prevBlockName'] || '';
         this.timestamp = data['timestamp'] || '';
@@ -71,4 +72,23 @@ export default class Block {
         return this.name && this.height > 0;
     }
 
+    getCoinBaseAddress = (): Address | undefined => {
+        const coinBaseAddress = this.getCoinBaseAddressString();
+        if (coinBaseAddress) {
+            return new Address(coinBaseAddress);
+        }
+        return undefined;
+    }
+
+    getCoinBaseAddressString = (): string | undefined => {
+        if (undefined === this.transactions[0]) {
+            return undefined;
+        }
+
+        if (undefined === this.transactions[0].outputs[0]) {
+            return undefined;
+        }
+
+        return this.transactions[0].outputs[0].getScriptAddress();
+    }
 }

@@ -66,7 +66,7 @@ export default class Storage {
     /**
      * @example: address.nameoftheaddress.%
      */
-    seek = (namespace: string, expression : string) : StorageHandle => {
+    seek = (namespace: string, expression: string): StorageHandle => {
         return new StorageHandle(this.storage, namespace, expression);
     }
 

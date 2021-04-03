@@ -22,7 +22,7 @@ export default class BlockFactory {
             name: object['name'] || '',
             target: object['target'] || '',
             nonce: object['nonce'] || '',
-            workDone : object['workDone'] || 0,
+            hash: object['hash'] || 0,
             prevBlockName: object['prevBlockName'] || '',
             timestamp: object['timestamp'] || '',
             transactionsNames: object['transactionsNames'] || [],
@@ -42,7 +42,7 @@ export default class BlockFactory {
             chainWeight: block.chainWeight,
             target: block.target,
             nonce: block.nonce,
-            workDone : block.workDone,
+            hash: block.hash,
             timestamp: block.timestamp,
             transactions: block.transactions.map(function createArrayFromObjectMapTransactions(transaction: Transaction) {
                 return TRANSACTION_FACTORY.createArrayFromObject(transaction);
@@ -50,7 +50,7 @@ export default class BlockFactory {
         };
     }
 
-    createStringFromObject = (block: Block) : string => {
+    createStringFromObject = (block: Block): string => {
         return JSON.stringify(this.createArrayFromObject(block));
     }
 }

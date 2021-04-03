@@ -21,10 +21,10 @@ export default class BlockModel {
             status: BLOCK_STATUS_VALID_FORK,
             height: prevBlock.height + 1,
             weight: 0,
-            chainWeight: 0,
+            chainWeight: prevBlock.chainWeight,
             name: '',
             prevBlockName: prevBlock.name,
-            
+
         });
 
         block.transactions.push(this.createRewardTransaction(address, block))

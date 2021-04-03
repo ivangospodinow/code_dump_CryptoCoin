@@ -1,7 +1,7 @@
 import Storage from './core/Storage/Storage';
 import MysqlStorage from './core/Storage/MysqlStorage';
 import settings from './settings';
-import { getTimestampString, rand, sha256x2 } from './core/tools';
+import { getTimestampString, hexToNumber, numberToHex, rand, reverseHex, sha256x2 } from './core/tools';
 import BlockModel from './core/Block/BlockModel';
 import Address from './core/Address/Address';
 import BlockRepo, { AddBlockOptions } from './core/Repo/BlockRepo';
@@ -13,13 +13,13 @@ import TransactionRepo from './core/Repo/TransactionRepo';
 import AddressService from './core/Service/AddressService';
 import UtxoRepo from './core/Repo/UtxoRepo';
 import PoolRepo from './core/Repo/PoolRepo';
-import { queueRepo, BLOCK_FACTORY, blockRepo, eventsManager } from './globals';
+import { queueRepo, BLOCK_FACTORY, blockRepo, eventsManager, chainRepo } from './globals';
 import Queue, { QUEUE_TYPE_BLOCK } from './core/Block/Queue';
 const cryptoRandomString = require('crypto-random-string');
 
 const storage = new Storage(new MysqlStorage(settings.mysql));
 
-const address = new Address(settings['addresses'][0]['public'], settings['addresses'][0]['private']);
+const address1 = new Address(settings['addresses'][0]['public'], settings['addresses'][0]['private']);
 const address2 = new Address(settings['addresses'][1]['public'], settings['addresses'][1]['private']);
 
 const transactionRepo = new TransactionRepo(storage);
@@ -28,13 +28,21 @@ const blockModel = new BlockModel(storage);
 const settingsRepo = new SettingsRepo(storage);
 const utxoRepo = new UtxoRepo(storage, transactionRepo);
 const poolRepo = new PoolRepo(storage, transactionRepo, utxoRepo);
-const mining = new MiningService(settingsRepo, blockModel, blockRepo, poolRepo, eventsManager);
+const mining1 = new MiningService(settingsRepo, blockModel, blockRepo, poolRepo, eventsManager, chainRepo);
+const mining2 = new MiningService(settingsRepo, blockModel, blockRepo, poolRepo, eventsManager, chainRepo);
+
 const validator = new BlockValidator(blockModel);
 
 const addressService = new AddressService(settingsRepo, blockRepo);
 
+const QUEUE_MAX_SIZe = 2;
+let QUEUE_SIZE = 0;
+
+// console.log(reverseHex('b8023849cd5fe7ccbe6e185408cb4e3a9acd4c98ed47919934e5d935d23024fa'));
+// process.exit();
+
 (function miner() {
-    let block;
+    let block: Block;
     let resultResult;
     let queueId: string;
     let waitForQueueToProcess: CallableFunction;
@@ -44,22 +52,49 @@ const addressService = new AddressService(settingsRepo, blockRepo);
         blockNamesForHeight: [],
     };
 
-    const minerLoop = async function () {
-        block = await mining.createNextBlock(address);
-        console.log('new block height ' + block.height);
-        resultResult = await mining.mine(block);
-        block.timestamp = getTimestampString();
-        block.target = resultResult['target'];
-        block.nonce = resultResult['nonce'];
+    const minerLoop = function (mining, addr) {
+        // console.log('Mine addr', addr);
+        // 
+        QUEUE_SIZE++;
 
-        blockOptions.chainHeight = await settingsRepo.getLastBlockHeight();
-        blockOptions.blockNamesForHeight = [];
+        mining.createNextBlock(addr).then(function (block: Block) {
+            console.log('new block name ' + block.height + ' ' + block.name);
+            // console.log('new block height ' + block.height);
+            mining.mine(block, addr).then(function (resultResult) {
 
-        console.log('Mined ' + block.height + ' diff ' + block.target);
+                block.target = resultResult['target'];
+                block.nonce = resultResult['nonce'];
+                block.hash = resultResult['hash'];
+                block.weight = resultResult['weight'];
+                block.chainWeight += block.weight;
 
-        await blockRepo.addBlock(block, blockOptions);
+                chainRepo.addBlock(block).then(function () {
+                    QUEUE_SIZE--;
+                    console.log('ADDED ' + block.name)
 
-        minerLoop();
+
+                    setTimeout(function () {
+                        minerLoop(mining1, address1);
+                    }, 1)
+                }).catch((error) => {
+                    QUEUE_SIZE--;
+                    console.log(error)
+                });
+
+
+
+            }).catch((error) => {
+                console.log(error)
+            });
+
+        });
+
+
+
+
+
+
+
         // queueId = await queueRepo.persist(new Queue({
         //     type: QUEUE_TYPE_BLOCK,
         //     data: BLOCK_FACTORY.createArrayFromObject(block)
@@ -90,9 +125,16 @@ const addressService = new AddressService(settingsRepo, blockRepo);
          */
 
     };
-    minerLoop();
+
+    setTimeout(function () {
+        minerLoop(mining1, address1);
+    }, 1);
+
+    // setTimeout(function () {
+    //     minerLoop(mining2, address2);
+    // }, 1);
 })();
 
-setInterval(() => {
-    console.log((process.memoryUsage().heapUsed / 1024 / 1024).toFixed(2) + 'mb');
-}, 5000);
+// setInterval(() => {
+//     console.log((process.memoryUsage().heapUsed / 1024 / 1024).toFixed(2) + 'mb');
+// }, 5000);

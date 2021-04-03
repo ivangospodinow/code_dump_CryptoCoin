@@ -12,11 +12,12 @@ import { IncomingMessage, ServerResponse } from "http";
 import { BLOCK_FACTORY } from "../../globals";
 import { isNumber } from "util";
 import ClientService from "./ClientService";
+import ChainRepo from "../Repo/ChainRepo";
 const bcrypt = require('bcrypt');
 
 export default class ApiService {
     methods: { [key: string]: string } = {
-        'GET.getBlock': 'getBlock',
+        'GET.getBlocks': 'getBlocks',
         'GET.getChainHeight': 'getChainHeight',
         'POST.propagateBlock': 'propagateBlock',
     };
@@ -26,6 +27,7 @@ export default class ApiService {
     poolRepo: PoolRepo;
     clientService: ClientService;
     blockValidator: BlockValidator;
+    chainRepo: ChainRepo;
 
     constructor(
         clientService: ClientService,
@@ -33,7 +35,8 @@ export default class ApiService {
         blockModel: BlockModel,
         blockRepo: BlockRepo,
         poolRepo: PoolRepo,
-        blockValidator: BlockValidator
+        blockValidator: BlockValidator,
+        chainRepo: ChainRepo
     ) {
         this.clientService = clientService;
         this.settingsRepo = settingsRepo;
@@ -41,6 +44,7 @@ export default class ApiService {
         this.blockRepo = blockRepo;
         this.poolRepo = poolRepo;
         this.blockValidator = blockValidator;
+        this.chainRepo = chainRepo;
     }
 
     handleRequest = (req: IncomingMessage, res: ServerResponse, query: { action: 'string' }, data?: {}) => {
@@ -50,16 +54,16 @@ export default class ApiService {
         }
 
         // setTimeout(() => {
-            this[this.methods[action]](query, data).then(function handleRequestSuccess(data: {}) {
-                res.write(JSON.stringify(data));
-                res.end();
-                // console.log('ENDING REQUEST ' + action)
-            }).catch(function handleRequestError() {
-                res.statusCode = 500;
-                res.write(JSON.stringify({ error: 'Error 500' }));
-                res.end();
-                // console.log('ENDING REQUEST ' + action)
-            });
+        this[this.methods[action]](query, data).then(function handleRequestSuccess(data: {}) {
+            res.write(JSON.stringify(data));
+            res.end();
+            // console.log('ENDING REQUEST ' + action)
+        }).catch(function handleRequestError() {
+            res.statusCode = 500;
+            res.write(JSON.stringify({ error: 'Error 500' }));
+            res.end();
+            // console.log('ENDING REQUEST ' + action)
+        });
         // }, rand(1000, 5000));
 
 
@@ -71,7 +75,7 @@ export default class ApiService {
         res.end();
     }
 
-    async getBlock(query: { height: number | string }) {
+    async getBlocks(query: { height: number | string }) {
         if (!isNumber(query['height'])) {
             query['height'] = parseInt(query['height']);
         }
@@ -80,11 +84,16 @@ export default class ApiService {
         if (query['height'] <= 0 || await this.settingsRepo.getLastBlockHeight() < query['height']) {
             return { error: 'block not found' };
         }
-        return BLOCK_FACTORY.createArrayFromObject(
-            await this.blockRepo.loadFullBlock(
-                await this.blockRepo.getBlockByHeight(query['height'])
-            )
-        );
+
+        return {
+            blocks: await Promise.all((await this.chainRepo.getHeightBlockNames(query['height'])).map(async function getBlockLoadByName(this: ApiService, blockName: string) {
+                return BLOCK_FACTORY.createArrayFromObject(
+                    await this.blockRepo.loadFullBlock(
+                        await this.blockRepo.getBlockByName(blockName)
+                    )
+                );
+            }.bind(this)))
+        };;
     }
 
     async getChainHeight() {
@@ -97,7 +106,8 @@ export default class ApiService {
         if (post['block']) {
             setTimeout(async function addBlockToQueue(this: ApiService) {
                 if (post['block']) {
-                    this.clientService.pushBlockToQueue(BLOCK_FACTORY.createFromObject(post['block']));
+                    console.log('block received ', post['block']['height'])
+                    this.chainRepo.addBlock(BLOCK_FACTORY.createFromObject(post['block']))
                 } else {
                     console.log('Block not available ?')
                 }

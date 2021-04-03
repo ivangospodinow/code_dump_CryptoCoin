@@ -11,5 +11,5 @@ export default class StorageInterface {
     get = (namespace: string, key: string, callback: StorageCallback) => { }
     put = (namespace: string, key: string, value: string | Object, callback: StorageCallback) => { }
     puts = (data: Array<{ namespace: string, key: string, value: string | object }>, callback: StorageCallback) => { }
-    seek = (namespace: string, expression : string) : StorageHandle => {}
+    seek = (namespace: string, expression: string): StorageHandle => { }
 }
