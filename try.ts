@@ -1,20 +1,38 @@
-import { blockRepo, settingsRepo } from "./globals";
+import { validator, address1, blockModel, blockRepo, chainRepo, settingsRepo, transactionRepo, utxoRepo, currentAddress, getRandomTestAddress, poolRepo } from "./globals";
 import Block from "./core/Block/Block";
+import { addressCreate } from "./core/Address/Address";
+import Transaction from "./core/Block/Transaction";
+
+
+
+
 
 (async function () {
-    let chainHeight = await settingsRepo.getLastBlockHeight();
-    let block = await blockRepo.getBlockByHeight(chainHeight);
-    console.log(block.height)
-    while (true) {
-        block = await blockRepo.getBlockByName(block.prevBlockName);
-        // console.log(block);
-        // break
-        console.log(block.height)
-        if (block.height <= 1) {
-            break
-        }
+    const amount = 5;
+    const utxos = await utxoRepo.getOutputsForValue(currentAddress, amount);
+    const transaction = blockModel.createPayToAddressTransaction(currentAddress, getRandomTestAddress(), utxos, amount / 2);
+    console.log(validator.isTransactionValid(transaction))
+    if (transaction) {
+        await poolRepo.addTransaction(transaction);
     }
+
+
 })();
+
+
+//673233f112f35e2c39f6e74f9121373150cff1691f6292c0ebe7c476b2844ba1
+
+// (async function () {
+//     // const block = await blockRepo.getBlockByName('673233f112f35e2c39f6e74f9121373150cff1691f6292c0ebe7c476b2844ba1');
+//     // console.log(await chainRepo.processAddedBlock(block));
+//     let blocks = [];
+//     blocks.push(await blockRepo.getBlockByName('f3a747b5baaa425fa4197606ea7f6655b8d226212aa87442cb14a35d158db776'));
+//     blocks.push(await blockRepo.getBlockByName('6ac24c27fd024a82d17c2e18c9068304e44f360718961ca3eebca6df8b839934'));
+
+//     console.log(await chainRepo.getBlocksChains(blocks))
+
+
+// })();
 
 
 /**

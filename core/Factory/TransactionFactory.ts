@@ -37,7 +37,7 @@ export default class TransactionFactory {
             name: transaction.name,
             num: transaction.num,
             blockName: transaction.block?.name,
-            inputs: transaction.inputs.map(function createArrayFromObjectMapInput(input : TransactionInput) {
+            inputs: transaction.inputs.map(function createArrayFromObjectMapInput(input: TransactionInput) {
                 return {
                     num: input.num,
                     outputNum: input.outputNum,
@@ -45,7 +45,7 @@ export default class TransactionFactory {
                     script: input.script
                 };
             }),
-            outputs: transaction.outputs.map(function createArrayFromObjectMapOutput(output : TransactionOutput) {
+            outputs: transaction.outputs.map(function createArrayFromObjectMapOutput(output: TransactionOutput) {
                 return {
                     num: output.num,
                     value: output.value,

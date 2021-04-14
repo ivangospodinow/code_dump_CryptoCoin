@@ -110,11 +110,18 @@ export default class BlockValidator {
             return false;
         }
 
-        if (addressVerify(input.utxo.createSignValue(), input.getSign(), input.utxo.getScriptAddress())) {
-            return true;
+        if (input.utxo.getScriptAddress() !== input.getSignAddress()) {
+            console.error('utxo address is different than input address');
+            return false;
         }
 
-        return false;
+        if (addressVerify(input.utxo.createSignValue(), input.getSign(), input.getSignAddress())) {
+            return true;
+        } else {
+            console.error('input sign is invalid');
+            return false;
+
+        }
     }
 
     isOutputValid = (output: TransactionOutput): boolean => {
@@ -130,7 +137,6 @@ export default class BlockValidator {
             console.error('Output PPK is required');
             return false;
         }
-        // console.error('isOutputValid needs to be implemented');
 
         return true;
     }
@@ -144,15 +150,6 @@ export default class BlockValidator {
     }
 
     isValueInValidRange = (value: number) => {
-        if (isNaN(value)) {
-            console.error('value ' + value + ' is not an number');
-            return false;
-        }
-
-        const string = String(value);
-        if (string.indexOf('.') === -1) {
-            return true;
-        }
-        return string.split('.')[1].length === settings.COIN_DECIMALS;
+        return value === parseInt(String(value), 10);
     }
 }

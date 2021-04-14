@@ -75,7 +75,13 @@ export default class BlockModel {
         return transaction;
     }
 
-    createPayToAddressTransaction = (from: Address, to: Address, utxos: Array<Utxo>, amount: number) => {
+    /**
+     * @TODO Move to transaction repo
+     */
+    createPayToAddressTransaction = (from: Address, to: Address, utxos: Array<Utxo>, amount: number): ?Transaction => {
+        // in case float is passed
+        amount = formatAmount(amount);
+
         const transaction = new Transaction({
             num: 0,
             name: '',
@@ -88,7 +94,7 @@ export default class BlockModel {
                 num,
                 outputNum: utxo.outputNum,
                 transactionName: utxo.transactionName,
-                script: 'SIGN ' + from.sign(utxo.createSignValue()),
+                script: 'SIGN ' + from.sign(utxo.createSignValue()) + ' ADDRESS ' + from.getPublic(),
                 transaction,
                 utxo,
             });
@@ -103,7 +109,7 @@ export default class BlockModel {
 
         if (amount > utxoValue) {
             console.error('new transaction value is bigger than requested');
-            return false;
+            return null;
         }
 
         if (utxoValue - amount > 0) {
@@ -111,7 +117,7 @@ export default class BlockModel {
                 num: 1,
                 value: formatAmount(utxoValue - amount),
                 script: 'PPK ' + from.getPublic(),
-                transaction
+                transaction,
             }));
         }
 
@@ -123,17 +129,8 @@ export default class BlockModel {
         return new TransactionOutput({
             num: 0,
             value: 0,
-            script: [
-                'PPK',
-                address.getPublic(),
-                'VALID',
-                address.sign(
-                    [
-                        transaction.block.prevBlockName
-                    ].join('')
-                )
-            ].join(' '),
-            transaction: transaction
+            script: 'PPK ' + address.getPublic(),
+            transaction,
         });
 
     }
@@ -163,7 +160,7 @@ export default class BlockModel {
         for (let o = 0; o <= transaction.outputs.length - 1; o++) {
             base.push(transaction.outputs[o].num);
             base.push(transaction.outputs[o].script);
-            base.push(transaction.outputs[o].value.toFixed(settings.BLOCK_REWARD));
+            base.push(transaction.outputs[o].value);
         }
 
         return sha256x2(base.join(''));

@@ -23,7 +23,8 @@ export default {
     nodes: nodes,
     NODE: node,
     SERVER_PORT: nodes[node].port,
-    BLOCK_REWARD: 1.00000000,
+    // its 1 count to the lowest point
+    BLOCK_REWARD: 100000000,
     COIN_DECIMALS: 8,
     TARGET_BLOKC_TIME_SEC: 5,
     TARGET_BLOKC_TIME_REAJUST: 5,
@@ -54,8 +55,8 @@ export default {
             private: '48d4f06d771239643b6eaab915da0d441733932763e51402164668d4bbccc95d',
         },
         {
-            public: '048ba6436141199766c0f9028b7742cda67fef1e4f04a54b04b08c0bd910b52d04033138520555968e4ce96253ca13b2636bb892e4389fbde1099f4c74e9e72a95',
-            private: '48d4f06d771239643b6eaab915da0d441733932763e51402164668d4bbccc95d',
+            public: '043be9ea9a3988b00427abaf453b255fc984ba558eceafa6993b6b15a9629bd0ae31edf4623d96a32326a5a2051c8017f867cb7bd6b0fe8c9d7fd031eec35b8712',
+            private: '3d7e885671931e99c3fc006983e0fd6bd4fde08bf269c829a54d8fd9879647c1',
         },
     ],
 };

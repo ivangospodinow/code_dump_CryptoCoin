@@ -6,7 +6,7 @@ export function rand(min: number, max: number) { // min and max included
 }
 
 export function formatAmount(value: number): number {
-    return parseFloat(value.toFixed(settings.COIN_DECIMALS));
+    return Math.floor(value);
 }
 
 export function sha256x2(value: string): string {

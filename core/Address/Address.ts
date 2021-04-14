@@ -11,6 +11,11 @@ export function addressVerify(original: string, signed: string, publicKey: strin
     return ec.verify(original, signed, publicKey, 'hex');
 }
 
+export function addressCreate(string: string, privateKey: string): Address {
+    var key = ec.genKeyPair();
+    return new Address(key.getPublic().encode('hex'), key.getPrivate().toString('hex'));
+}
+
 /**
  * EC.prototype.keyFromPrivate
  * EC.prototype.keyFromPublic

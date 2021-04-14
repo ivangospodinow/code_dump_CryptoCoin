@@ -22,7 +22,7 @@ export default class UtxoRepo {
         this.transactionRepo = transactionRepo;
     }
 
-    getOutputByNameAndNum = (transactionName: string, outputNum : number): Promise<Utxo | undefined> => {
+    getOutputByNameAndNum = (transactionName: string, outputNum: number): Promise<Utxo | undefined> => {
         return new Promise(function getOutputByNameAndNumPromise(this: UtxoRepo, resolve: CallableFunction, reject: any) {
             this.storage.get(NAMESPACE, 'output.' + transactionName + '.' + outputNum).then(function getBlockByNameStorageFetch(result: string) {
                 resolve(result.length ? UTXO_FACTORY.createFromString(result) : undefined);
@@ -40,6 +40,7 @@ export default class UtxoRepo {
             let tmp: Utxo;
             let amount: number = 0;
             const utxos = [];
+            let i = 0;
             while (handle.hasData()) {
                 tmp = UTXO_FACTORY.createFromString(await handle.next());
                 if (tmp.hashedAddress === address.getHashed()) {
@@ -47,7 +48,7 @@ export default class UtxoRepo {
                     amount += tmp.value;
                 }
 
-                if (amount >= value) {
+                if (value > 0 && amount >= value) {
                     break;
                 }
             }
@@ -55,14 +56,14 @@ export default class UtxoRepo {
         }.bind(this));
     }
 
-    populateTransaction = (transaction: Transaction): Promise<Transaction> => {
-        return new Promise(async function populateTransactionPromise(this: UtxoRepo, resolve: CallableFunction, reject: any) {
-            for (let i in transaction.inputs) {
-                if (transaction.inputs[i].transactionName) {
-                    transaction.inputs[i].utxo = await this.getOutputByNameAndNum(transaction.inputs[i].transactionName, transaction.inputs[i].outputNum);
-                }
-            }
-            resolve(transaction);
-        }.bind(this));
-    }
+    // populateTransaction = (transaction: Transaction): Promise<Transaction> => {
+    //     return new Promise(async function populateTransactionPromise(this: UtxoRepo, resolve: CallableFunction, reject: any) {
+    //         for (let i in transaction.inputs) {
+    //             if (transaction.inputs[i].transactionName) {
+    //                 transaction.inputs[i].utxo = await this.getOutputByNameAndNum(transaction.inputs[i].transactionName, transaction.inputs[i].outputNum);
+    //             }
+    //         }
+    //         resolve(transaction);
+    //     }.bind(this));
+    // }
 }

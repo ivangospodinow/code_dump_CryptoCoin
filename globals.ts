@@ -18,6 +18,7 @@ import QueueService from './core/Service/QueueService';
 import Address from './core/Address/Address';
 import EventsManager from './core/Events/EventManager';
 import ChainRepo from './core/Repo/ChainRepo';
+import { rand } from './core/tools';
 
 export const eventsManager = new EventsManager;
 export const mysqlStorage = new MysqlStorage(settings.mysql);
@@ -38,9 +39,7 @@ export const utxoRepo = new UtxoRepo(storage, transactionRepo);
 export const blockRepo = new BlockRepo(storage, transactionRepo, settingsRepo, eventsManager, validator, utxoRepo); 0
 export const queueRepo = new QueueRepo(storage);
 export const chainRepo = new ChainRepo(storage, settingsRepo, validator, blockRepo, eventsManager);
-
-
-export const poolRepo = new PoolRepo(storage, transactionRepo, utxoRepo);
+export const poolRepo = new PoolRepo(storage);
 
 export const mining = new MiningService(settingsRepo, blockModel, blockRepo, poolRepo, eventsManager, chainRepo);
 // @TODO fix coupling 
@@ -58,8 +57,19 @@ export const addressService = new AddressService(settingsRepo, blockRepo);
 
 export const BLOCK_FACTORY = new BlockFactory;
 
+export const currentAddress = new Address(settings['addresses'][settings.NODE]['public'], settings['addresses'][settings.NODE]['private']);
+
 export const address1 = new Address(settings['addresses'][0]['public'], settings['addresses'][0]['private']);
 export const address2 = new Address(settings['addresses'][1]['public'], settings['addresses'][1]['private']);
+export const address3 = new Address(settings['addresses'][2]['public'], settings['addresses'][2]['private']);
 
-export const TMP_MINING_ADDRESS = new Address(settings['addresses'][settings.NODE]['public'], settings['addresses'][settings.NODE]['private'])
+export const TMP_MINING_ADDRESS = new Address(settings['addresses'][settings.NODE]['public'], settings['addresses'][settings.NODE]['private']);
 
+export function getRandomTestAddress(): Address {
+    switch (rand(1, 3)) {
+        case 1: return address1;
+        case 2: return address2;
+        case 3: return address3;
+
+    }
+}

@@ -80,6 +80,7 @@ export default class MiningService {
             const target = await this.getTarget(block);
 
             console.log('Target ' + target);
+            let totalHashes = 0;
             let counter = 0;
             let result;
             let resultInt;
@@ -110,6 +111,7 @@ export default class MiningService {
                             // process.stdout.write('|');
                             counter = 0;
                         }
+                        totalHashes++;
 
                         result = sha256x2(hash);
                         signedHash = address.sign(result);
@@ -119,6 +121,7 @@ export default class MiningService {
                         // console.log(resultInt, '<=', target)
                         if (resultInt <= target) {
                             console.log('block found ', block.height, block.name)
+                            console.log('TOTAL HASHES ---------------', totalHashes)
                             return resolve({
                                 nonce: salt,
                                 target: numberToHex(target),

@@ -1,5 +1,5 @@
 import Storage from "../Storage/Storage";
-import Block, { BlockConstructor } from "../Block/Block";
+import Block, { BlockConstructor, BLOCK_STATUS_MINED } from "../Block/Block";
 import settings from '../../settings';
 import SettingsRepo from '../Repo/SettingsRepo';
 import BlockModel from "../Block/BlockModel";
@@ -118,7 +118,7 @@ export default class ClientService {
             // console.log('REQUESTING BLOCK ' +( cleintHeight + 1))
             blocks = await this.getBlocks(cleintHeight + 1);
             if (blocks) {
-                await this.chainRepo.validateAndAddBlocks(blocks);
+                await this.chainRepo.addBlocks(blocks);
             }
 
             processing = false;
@@ -145,7 +145,7 @@ export default class ClientService {
                     // if (block.height <= await this.settingsRepo.getLastBlockHeight()) {
                     //     return minerLoop();
                     // }
-
+                    block.status = BLOCK_STATUS_MINED;
                     block.target = resultResult['target'];
                     block.nonce = resultResult['nonce'];
                     block.hash = resultResult['hash'];
@@ -194,7 +194,9 @@ export default class ClientService {
         return new Promise(async function syncPromise(this: ClientService, resolve: CallableFunction, reject: any) {
 
             let newtworkTarget: SyncTarget | undefined = await this.ensureSyncTarget();
+            console.log('network target resolved to ', newtworkTarget)
             if (!newtworkTarget) {
+                // if not network target found, skip the sync
                 return resolve(false);
             }
 
@@ -210,7 +212,7 @@ export default class ClientService {
                 console.log('Request block ', cleintHeight + 1)
                 blocks = await this.getBlocksFromPeer(newtworkTarget.peer, cleintHeight + 1);
                 if (blocks) {
-                    let debug = await this.chainRepo.validateAndAddBlocks(blocks);
+                    let debug = await this.chainRepo.addBlocks(blocks);
                     console.log('blocks added', debug)
                     cleintHeight = await this.settingsRepo.getLastBlockHeight();
 
@@ -227,7 +229,7 @@ export default class ClientService {
             setTimeout(() => timeout = true, 10 * 1000);
             while (true) {
                 newtworkTarget = await this.getSyncTarget();
-                console.log('network target', newtworkTarget)
+                // console.log('network target', newtworkTarget, timeout)
                 if (newtworkTarget || timeout) {
                     break;
                 }

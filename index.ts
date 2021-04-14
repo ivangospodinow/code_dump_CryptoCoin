@@ -3,12 +3,13 @@ import { IncomingMessage, ServerResponse } from 'express';
 import { apiService, clientService } from './globals';
 
 const express = require('express');
+var cors = require('cors');
 const app = express();
 const bodyParser = require('body-parser')
 const url = require('url');
 
 
-
+app.use(cors());
 app.use(bodyParser.json());       // to support JSON-encoded bodies
 app.use(bodyParser.urlencoded({     // to support URL-encoded bodies
     extended: true

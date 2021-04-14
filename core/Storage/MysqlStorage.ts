@@ -17,7 +17,7 @@ export default class MysqlStorage extends StorageInterface {
             "SELECT EXISTS(SELECT `value` FROM `" + namespace + "` WHERE `key` = ?) AS `exists`",
             [key],
             function queryPutCallback(error: any, result: any) {
-                callback(undefined !== result[0] ? result[0]['exists'] > 0 : '', error);
+                callback(result && undefined !== result[0] ? result[0]['exists'] > 0 : '', error);
             });
     }
 
@@ -26,7 +26,7 @@ export default class MysqlStorage extends StorageInterface {
             "SELECT `value` FROM `" + namespace + "` WHERE `key` = ?",
             [key],
             function queryPutCallback(error: any, result: any) {
-                callback(undefined !== result[0] ? result[0]['value'] || '' : '', error);
+                callback(result && undefined !== result[0] ? result[0]['value'] || '' : '', error);
             });
     }
 

@@ -10,10 +10,7 @@ export default class ScriptAware {
     constructor(data: TransactionOutputConstructor | UtxoConstructor | TransactionInputConstructor) {
         this.script = data['script'];
     }
-    
-    /**
-     * Expected: PPK 0452b239584f1f9365e6840209423812c6ff58e2df636f76d48ba95b50d4133ed6bd9cdc80815ac286e8c5286607c1a4e68111362b9e432e8311bd3b57264131ed VALID 3045022100b838902a531620f21885c9d4aea1a9516c31ce028c1af4f2563ef039f52f32dc02201e30121ccaccff9b981a1ce1c34b3ab720bd3fefffa8917c3c9e80ef8f0359ab
-     */
+
     getScriptKeyValuePair = (): TransactionScriptKeyValueType => {
         if (undefined === this.scriptKeyValueType) {
             this.scriptKeyValueType = {};
@@ -33,6 +30,10 @@ export default class ScriptAware {
 
     getSign = (): string => {
         return this.getScriptKeyValuePair()['SIGN'] || '';
+    }
+
+    getSignAddress = (): string => {
+        return this.getScriptKeyValuePair()['ADDRESS'] || '';
     }
 
     getScriptValidatedHash = (): string => {

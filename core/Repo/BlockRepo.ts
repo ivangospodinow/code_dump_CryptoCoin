@@ -1,5 +1,5 @@
 import Storage, { DATA_REMOVE_VALUE } from "../Storage/Storage";
-import Block from "../Block/Block";
+import Block, { BlockStatusType, BLOCK_STATUSES } from "../Block/Block";
 import settings from '../../settings';
 import { json, sha256x2, paddBlockHeight, getTimestampString } from "../tools";
 import BlockFactory from "../Factory/BlockFactory";
@@ -74,10 +74,19 @@ export default class BlockRepo {
     }
     getBlockByName = (name: string): Promise<Block> => {
         return new Promise(function getBlockByNamePromise(this: BlockRepo, resolve: CallableFunction, reject: any) {
-            this.storage.get(NAMESPACE, name).then(function getBlockByNameStorageFetch(result: string) {
-                resolve(BLOCK_FACTORY.createFromString(result));
-            }).catch(reject);
+            this.storage.get(NAMESPACE, name).then(async function getBlockByNameStorageFetch(this: BlockRepo, result: string) {
+
+                resolve(
+                    BLOCK_FACTORY.createFromString(result)
+                        .setStatus(await this.getBlockStatus(name))
+                );
+
+            }.bind(this)).catch(reject);
         }.bind(this));
+    }
+
+    getBlockHeight = (name: string): Promise<number> => {
+        return this.getValueIntegerByKey(name + '.height');
     }
 
     getBlockNameByHeight = (height: number): Promise<string> => {
@@ -87,6 +96,10 @@ export default class BlockRepo {
 
     getBlockTimestampByName = (name: string): Promise<string> => {
         return this.getValueStringByKey(name + '.timestamp');
+    }
+
+    getBlockStatus = (name: string): Promise<BlockStatusType> => {
+        return this.getValueStringByKey(name + '.status');
     }
 
     getWorkDoneByName = (name: string): Promise<number> => {
@@ -148,125 +161,125 @@ export default class BlockRepo {
         }.bind(this));
     }
 
-    populateUtxos = (block: Block): Promise<Block> => {
-        return new Promise(async function populateUtxosPrimise(this: BlockRepo, resolve: CallableFunction, reject: any) {
-            try {
-                for (let i in block.transactions) {
-                    if (!block.transactions[i].isCoinbase()) {
-                        block.transactions[i] = await this.utxoRepo.populateTransaction(block.transactions[i]);
-                    }
-                }
-                resolve(block);
-            } catch (error) {
-                reject(error);
-            }
-        }.bind(this));
-    }
+    // populateUtxos = (block: Block): Promise<Block> => {
+    //     return new Promise(async function populateUtxosPrimise(this: BlockRepo, resolve: CallableFunction, reject: any) {
+    //         try {
+    //             for (let i in block.transactions) {
+    //                 if (!block.transactions[i].isCoinbase()) {
+    //                     block.transactions[i] = await this.utxoRepo.populateTransaction(block.transactions[i]);
+    //                 }
+    //             }
+    //             resolve(block);
+    //         } catch (error) {
+    //             reject(error);
+    //         }
+    //     }.bind(this));
+    // }
 
     /**
      * Checks for block orphan logic
      */
-    validateAndAddBlock = (block: Block, minedResult: MinedResult): Promise<boolean> => {
-        return new Promise(async function validateAndAddBlockPrimise(this: BlockRepo, resolve: CallableFunction, reject: any) {
-            block.timestamp = getTimestampString();
+    // validateAndAddBlock = (block: Block, minedResult: MinedResult): Promise<boolean> => {
+    //     return new Promise(async function validateAndAddBlockPrimise(this: BlockRepo, resolve: CallableFunction, reject: any) {
+    //         block.timestamp = getTimestampString();
 
-            console.log('+ ' + block.height + ' ' + block.name);
+    //         console.log('+ ' + block.height + ' ' + block.name);
 
-            const options: AddBlockOptions = {
-                blockNamesForHeight: [],
-                chainHeight: 0,
-            };
-            // console.log('Adding new block ' + block.height)
-            // console.log('validateAndAddBlock ' + block.name);
-            block.workDone = minedResult.workDone;
+    //         const options: AddBlockOptions = {
+    //             blockNamesForHeight: [],
+    //             chainHeight: 0,
+    //         };
+    //         // console.log('Adding new block ' + block.height)
+    //         // console.log('validateAndAddBlock ' + block.name);
+    //         block.workDone = minedResult.workDone;
 
-            // skip early, if block is not valid, reject it
-            // if (false === this.blockValidator.isBlockValid(block)) {
-            //     console.log('validateAndAddBlock: blockValidator : invalid block');
-            //     return resolve(false);
-            // }
+    //         // skip early, if block is not valid, reject it
+    //         // if (false === this.blockValidator.isBlockValid(block)) {
+    //         //     console.log('validateAndAddBlock: blockValidator : invalid block');
+    //         //     return resolve(false);
+    //         // }
 
-            // if (block.height > 1 && false === await this.exists(block.prevBlockName)) {
-            //     console.log('Prev block does not exists');
-            //     return resolve(false);
-            // }
+    //         // if (block.height > 1 && false === await this.exists(block.prevBlockName)) {
+    //         //     console.log('Prev block does not exists');
+    //         //     return resolve(false);
+    //         // }
 
-            if (await this.exists(block.name)) {
-                console.log('Block already exists, skipping add');
-                return resolve(false);
-            }
+    //         if (await this.exists(block.name)) {
+    //             console.log('Block already exists, skipping add');
+    //             return resolve(false);
+    //         }
 
-            const prevHeightBlockName = await this.getBlockNameByHeight(block.height - 1);
+    //         const prevHeightBlockName = await this.getBlockNameByHeight(block.height - 1);
 
-            // forking
-            if (prevHeightBlockName !== block.prevBlockName) {
-                // check if block exists in side chain
-                if ((await this.getBlocksNamesForHeight(block.height - 1)).indexOf(block.prevBlockName) === -1) {
-                    console.log('Block does not exists in sidechain');
-                    return resolve(false);
-                }
-                console.log('Calcualting longest chain');
-                console.log('Prev block name ' + block.prevBlockName);
+    //         // forking
+    //         if (prevHeightBlockName !== block.prevBlockName) {
+    //             // check if block exists in side chain
+    //             if ((await this.getBlocksNamesForHeight(block.height - 1)).indexOf(block.prevBlockName) === -1) {
+    //                 console.log('Block does not exists in sidechain');
+    //                 return resolve(false);
+    //             }
+    //             console.log('Calcualting longest chain');
+    //             console.log('Prev block name ' + block.prevBlockName);
 
-                let mainChainWorkDone: number = 0;
-                let forkChainWorkDone: number = block.workDone;
+    //             let mainChainWorkDone: number = 0;
+    //             let forkChainWorkDone: number = block.workDone;
 
-                let mainChainName: string = '';
-                let forkChainName: string = block.name;
+    //             let mainChainName: string = '';
+    //             let forkChainName: string = block.name;
 
-                let mainChainPrevName: string = '';
-                let forkChainPrevName: string = block.prevBlockName;
+    //             let mainChainPrevName: string = '';
+    //             let forkChainPrevName: string = block.prevBlockName;
 
-                let height: number = await this.settingsRepo.getLastBlockHeight();
-                const fork: ForkArray = [
-                    {
-                        height: block.height - 1,
-                        name: forkChainPrevName,
-                    }
-                ];
+    //             let height: number = await this.settingsRepo.getLastBlockHeight();
+    //             const fork: ForkArray = [
+    //                 {
+    //                     height: block.height - 1,
+    //                     name: forkChainPrevName,
+    //                 }
+    //             ];
 
-                console.log('Claulate chain ', block.height, block.name);
+    //             console.log('Claulate chain ', block.height, block.name);
 
-                while (true) {
-                    console.log(height)
-                    mainChainName = await this.getBlockNameByHeight(height);
-                    mainChainPrevName = await this.getPrevBlockNameByName(mainChainName);
-                    mainChainWorkDone += await this.getWorkDoneByName(mainChainName);
+    //             while (true) {
+    //                 console.log(height)
+    //                 mainChainName = await this.getBlockNameByHeight(height);
+    //                 mainChainPrevName = await this.getPrevBlockNameByName(mainChainName);
+    //                 mainChainWorkDone += await this.getWorkDoneByName(mainChainName);
 
-                    if (height === block.height) {
-                        forkChainName = block.name;
-                        forkChainPrevName = block.prevBlockName;
-                        forkChainWorkDone = block.workDone;
-                    } else if (height < block.height) {
-                        forkChainName = forkChainPrevName;
-                        forkChainPrevName = await this.getPrevBlockNameByName(forkChainName);
-                        forkChainWorkDone += await this.getWorkDoneByName(forkChainName);
-                        fork.push({
-                            height: height - 1,
-                            name: forkChainPrevName,
-                        });
-                    }
-                    if (mainChainPrevName === forkChainPrevName) {
-                        break;
-                    }
-                    height--;
-                }
+    //                 if (height === block.height) {
+    //                     forkChainName = block.name;
+    //                     forkChainPrevName = block.prevBlockName;
+    //                     forkChainWorkDone = block.workDone;
+    //                 } else if (height < block.height) {
+    //                     forkChainName = forkChainPrevName;
+    //                     forkChainPrevName = await this.getPrevBlockNameByName(forkChainName);
+    //                     forkChainWorkDone += await this.getWorkDoneByName(forkChainName);
+    //                     fork.push({
+    //                         height: height - 1,
+    //                         name: forkChainPrevName,
+    //                     });
+    //                 }
+    //                 if (mainChainPrevName === forkChainPrevName) {
+    //                     break;
+    //                 }
+    //                 height--;
+    //             }
 
-                if (mainChainWorkDone < forkChainWorkDone) {
-                    options.fork = fork;
-                    return resolve(await this.addBlock(block, options));
-                }
-            }
+    //             if (mainChainWorkDone < forkChainWorkDone) {
+    //                 options.fork = fork;
+    //                 return resolve(await this.addBlock(block, options));
+    //             }
+    //         }
 
-            block = await this.populateUtxos(block);
-            if (this.blockValidator.isBlockValid(block)) {
-                return resolve(await this.addBlock(block, options));
-            }
-            return resolve(false);
+    //         block = await this.populateUtxos(block);
+    //         if (this.blockValidator.isBlockValid(block)) {
+    //             return resolve(await this.addBlock(block, options));
+    //         }
+    //         return resolve(false);
 
 
-        }.bind(this));
-    }
+    //     }.bind(this));
+    // }
 
     // addBlock = (block: Block, options: AddBlockOptions): Promise<boolean> => {
     //     return new Promise(async function laddBlockPrimise(this: BlockRepo, resolve: CallableFunction, reject: any) {
@@ -295,7 +308,7 @@ export default class BlockRepo {
      * @param block 
      * @returns 
      */
-    addBlock = (block: Block) => {
+    addBlock = (block: Block): Promise<boolean> => {
         return new Promise(async function persistWithHeightNamesPromise(this: BlockRepo, resolve: CallableFunction, reject: any) {
 
             let data = [];
@@ -352,6 +365,11 @@ export default class BlockRepo {
                 value: block.height,
             });
 
+            data.push({
+                namespace: 'block',
+                key: block.name + '.status',
+                value: block.status,
+            });
 
             data.push({
                 namespace: 'block',
@@ -427,6 +445,7 @@ export default class BlockRepo {
                             outputNum: block.transactions[t].outputs[o].num,
                             value: block.transactions[t].outputs[o].value,
                             script: block.transactions[t].outputs[o].script,
+                            // @TODO may not be needed
                             hashedAddress: sha256x2(block.transactions[t].outputs[o].getScriptAddress()),
                         },
                     });
@@ -473,5 +492,9 @@ export default class BlockRepo {
 
             });
         }.bind(this));
+    }
+
+    updateStatus = (blockName: string, status: BlockStatusType) => {
+        return this.storage.put(NAMESPACE, blockName + '.status', status);
     }
 }

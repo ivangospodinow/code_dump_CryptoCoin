@@ -1,0 +1,2 @@
+UTX for storage of data, and if spent data is deleted
+transfer of UTXO with two signs the owner signs and the new party signs in case of locked coins or stored data

@@ -2,8 +2,27 @@ import Transaction from "./Transaction";
 import settings from "../../settings";
 import Address from "../Address/Address";
 
+// This is our current active chain (the longest chain).
+export const BLOCK_STATUS_VALID = 'valid';
+export const BLOCK_STATUS_INVALID = 'invalid';
+// Our node performed a chain reorganisation. We downloaded and validated these blocks and had them as part of our active chain, but we later deactivated them after receiving a new longer chain of blocks.
+export const BLOCK_STATUS_VALID_FORK = 'valid-fork';
+export const BLOCK_STATUS_STAIL = 'stail';
+export const BLOCK_STATUS_ORPHANED = 'orphaned';
+export const BLOCK_STATUS_MINED = 'mined';
+
+export const BLOCK_STATUSES = [
+    BLOCK_STATUS_VALID,
+    BLOCK_STATUS_VALID_FORK,
+    BLOCK_STATUS_STAIL,
+    BLOCK_STATUS_ORPHANED,
+    BLOCK_STATUS_MINED
+];
+
+export type BlockStatusType = typeof BLOCK_STATUSES[number];
+
 export type BlockConstructor = {
-    status: string,
+    status: BlockStatusType,
     height: number,
     weight: number,
     target?: number,
@@ -16,15 +35,9 @@ export type BlockConstructor = {
     transactionsNames?: Array<string>,
     transactions?: Array<Transaction>,
 };
-
-export const BLOCK_STATUS_VALID = 'valid';
-export const BLOCK_STATUS_VALID_FORK = 'valid-fork';
-export const BLOCK_STATUS_STAIL = 'stail';
-export const BLOCK_STATUS_ORPHANED = 'orphaned';
-
 export default class Block {
 
-    public status: string;
+    public status: BlockStatusType;
     public height: number;
     public weight: number;
     public chainWeight: number;
@@ -54,6 +67,11 @@ export default class Block {
             transaction.block = this;
             return transaction;
         }.bind(this));
+    }
+
+    setStatus = (status: BlockStatusType): Block => {
+        this.status = status;
+        return this;
     }
 
     setName = (name: string) => {

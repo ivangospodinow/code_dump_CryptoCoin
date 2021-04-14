@@ -1,3 +1,4 @@
+import { sha256x2 } from "../tools";
 import ScriptAware from "./ScriptAware";
 
 export type UtxoConstructor = {
@@ -10,7 +11,7 @@ export type UtxoConstructor = {
     hashedAddress: string
 };
 
-export default class Utxo extends ScriptAware{
+export default class Utxo extends ScriptAware {
     blockHeight: number;
     transactionName: string;
     transactionNum: number;
@@ -23,13 +24,18 @@ export default class Utxo extends ScriptAware{
         this.blockHeight = data['blockHeight'];
         this.transactionName = data['transactionName'];
         this.transactionNum = data['transactionNum'];
-        this.outputNum = data['outputNum']; 
+        this.outputNum = data['outputNum'];
         this.value = data['value'];
         this.hashedAddress = data['hashedAddress'];
     }
 
     createSignValue = (): string => {
-        return this.script + '' + this.value;
+        return sha256x2([
+            this.transactionName,
+            this.transactionNum,
+            this.script,
+            String(this.value),
+        ].join(''));
     }
 
     getValue = (): number => {

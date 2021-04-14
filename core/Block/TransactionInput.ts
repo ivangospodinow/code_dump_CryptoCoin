@@ -12,7 +12,7 @@ export type TransactionInputConstructor = {
     utxo?: Utxo,
 };
 
-export default class TransactionInput extends ScriptAware{
+export default class TransactionInput extends ScriptAware {
 
     public num: number;
     public outputNum?: number;
@@ -32,12 +32,18 @@ export default class TransactionInput extends ScriptAware{
 
     getValue = (): number => {
         if (this.transaction.isCoinbase() && this.num === 0) {
+            // @TODO may be get it from the stored value ?
             return settings.BLOCK_REWARD;
         } else if (this.utxo) {
             return this.utxo.getValue();
         }
         console.error('Check for referenced output', this.utxo)
         return 0;
+    }
+
+    isCoinbaseInput = (): boolean => {
+        // @TODO add better validation
+        return parseInt(this.script) > 0;
     }
 
 }

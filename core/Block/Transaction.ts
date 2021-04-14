@@ -38,7 +38,11 @@ export default class Transaction {
     }
 
     isCoinbase = (): boolean => {
-        return this.num === 0;
+        if (undefined === this.inputs[0]) {
+            console.error('No input in transaction ', this);
+            return false;
+        }
+        return this.inputs[0].isCoinbaseInput();
     }
 
     setName = (name: string) => {
