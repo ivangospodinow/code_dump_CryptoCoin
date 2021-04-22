@@ -1,5 +1,5 @@
 import Storage from "../Storage/Storage";
-import Block, { BlockConstructor, BLOCK_STATUS_MINED } from "../Block/Block";
+import Block, { BlockConstructor, BLOCK_STATUS_INVALID, BLOCK_STATUS_MINED } from "../Block/Block";
 import settings from '../../settings';
 import SettingsRepo from '../Repo/SettingsRepo';
 import BlockModel from "../Block/BlockModel";
@@ -9,7 +9,7 @@ import PoolRepo from "../Repo/PoolRepo";
 import BlockValidator from "../Validator/BlockValidator";
 import { sha256x2, getSecondsBetweenDates, unixTime } from "../tools";
 import { IncomingMessage, ServerResponse } from "http";
-import { BLOCK_FACTORY, address1, TMP_MINING_ADDRESS } from "../../globals";
+import { BLOCK_FACTORY, address1, TMP_MINING_ADDRESS, getRandomTestAddress, POOL_ITEM_FACTORY } from "../../globals";
 import { isNumber } from "util";
 import QueueService from "./QueueService";
 import Queue, { QUEUE_TYPE_BLOCK, QUEUE_TYPE_SYNC } from "../Block/Queue";
@@ -22,6 +22,8 @@ import axios from 'axios';
 import EventsManager from "../Events/EventManager";
 import ChainRepo from "../Repo/ChainRepo";
 import { resolve } from "path";
+import PoolItem from "../Block/PoolItem";
+import ClientTestDataSeeder from '../../tests/ClientTestDataSeeder';
 
 export type SyncTarget = { height: number, peer: PeerConstructor };
 
@@ -60,6 +62,9 @@ export default class ClientService {
         this.miningService = miningService;
         this.eventsManager = eventsManager;
         this.chainRepo = chainRepo;
+        this.peers = new Peers([]);
+
+        this.eventsManager.on('EVENT_POOL_ITEMS_ADDED', this.populatePoolItems);
     }
 
     isSynced(): boolean {
@@ -75,11 +80,17 @@ export default class ClientService {
     start = (): boolean => {
         // @TODO peers management
 
+        // @TODO for tests only
+        console.log('Data seeder started')
+        const seeder = new ClientTestDataSeeder;
+        seeder.start();
+
         this.settingsRepo.getPeers().then(function setPeers(this: ClientService, peers: Peers) {
             console.log('Peers loaded', peers.getAll())
             this.hasFullSync = true;
             this.peers = peers;
 
+            // @TODO uncomment
             this.ensureSync().then(function clientSynced(this: ClientService) {
                 console.log('------Client synced--------');
 
@@ -91,14 +102,18 @@ export default class ClientService {
                 this.startMining();
 
 
-                // @TODO mining adter sync ?
+                //     // @TODO mining adter sync ?
 
 
             }.bind(this));
+            console.log('asfasf')
+            // this.startMining();
 
         }.bind(this));
 
         // this.startMining();
+
+
 
         return true;
     }
@@ -118,7 +133,7 @@ export default class ClientService {
             // console.log('REQUESTING BLOCK ' +( cleintHeight + 1))
             blocks = await this.getBlocks(cleintHeight + 1);
             if (blocks) {
-                await this.chainRepo.addBlocks(blocks);
+                await this.chainRepo.addBlocks(blocks.map(block => block.setStatus(BLOCK_STATUS_INVALID)));
             }
 
             processing = false;
@@ -139,9 +154,16 @@ export default class ClientService {
                 /**
                  * @TODO Fix address
                  */
-                block = await this.miningService.createNextBlock(TMP_MINING_ADDRESS);
+                const tmpAddress = getRandomTestAddress();
+                block = await this.miningService.createNextBlock(tmpAddress);
+                if (!this.blockValidator.isBlockValid(block)) {
+                    console.log(block);
+                    console.log('block invalid');
+                    process.exit();
+                }
+
                 console.log('Block candidate ', block.height, block.name)
-                this.miningService.mine(block, TMP_MINING_ADDRESS).then(async function blockMinedSuccess(this: ClientService, resultResult: MineResult) {
+                this.miningService.mine(block, tmpAddress).then(async function blockMinedSuccess(this: ClientService, resultResult: MineResult) {
                     // if (block.height <= await this.settingsRepo.getLastBlockHeight()) {
                     //     return minerLoop();
                     // }
@@ -212,7 +234,8 @@ export default class ClientService {
                 console.log('Request block ', cleintHeight + 1)
                 blocks = await this.getBlocksFromPeer(newtworkTarget.peer, cleintHeight + 1);
                 if (blocks) {
-                    let debug = await this.chainRepo.addBlocks(blocks);
+                    console.log(blocks[0].transactions[1]);
+                    let debug = await this.chainRepo.addBlocks(blocks.map(block => block.setStatus(BLOCK_STATUS_INVALID)));
                     console.log('blocks added', debug)
                     cleintHeight = await this.settingsRepo.getLastBlockHeight();
 
@@ -293,7 +316,18 @@ export default class ClientService {
             { block: BLOCK_FACTORY.createArrayFromObject(block) },
             callback
         );
+    }
 
+    populatePoolItems = (poolItemsData: Array<any>) => {
+        // @TODO may be queue it ?
+        // console.log('Propagate poolitem')
+        let poolItemData: any;
+        for (poolItemData of poolItemsData) {
+            this.propagate(
+                { action: 'propagatePoolItem' },
+                { poolItem: poolItemData }
+            );
+        }
     }
 
     /**
@@ -306,7 +340,6 @@ export default class ClientService {
      */
     propagate = (query: { action: string }, data: Object, callback?: CallableFunction): Promise<boolean> => {
         return new Promise(function propagatePromise(this: ClientService, resolve: CallableFunction, reject: any) {
-
             const peers = this.peers.getAll();
             const size = peers.length;
             // console.log(size)

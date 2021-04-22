@@ -53,7 +53,7 @@ INSERT INTO
 VALUES
     (
         'c158ce5196a340e4a8a9db11930c6ab20f77136656642f2b6227b8aafe4029f9',
-        '{\"name\":\"c158ce5196a340e4a8a9db11930c6ab20f77136656642f2b6227b8aafe4029f9\",\"num\":0,\"blockName\":\"45036c5304cc511c95d88bcf6b039a25d429b48ce820cad2fd11f0bcdf9cdb2e\",\"inputs\":[{\"num\":0,\"script\":1}],\"outputs\":[{\"num\":0,\"value\":1,\"script\":\"PPK 0452b239584f1f9365e6840209423812c6ff58e2df636f76d48ba95b50d4133ed6bd9cdc80815ac286e8c5286607c1a4e68111362b9e432e8311bd3b57264131ed\"}]}'
+        '{\"name\":\"c158ce5196a340e4a8a9db11930c6ab20f77136656642f2b6227b8aafe4029f9\",\"num\":0,\"blockName\":\"45036c5304cc511c95d88bcf6b039a25d429b48ce820cad2fd11f0bcdf9cdb2e\",\"inputs\":[{\"num\":0,\"script\":1}],\"outputs\":[{\"num\":0,\"value\":100000000,\"script\":\"PPK 0452b239584f1f9365e6840209423812c6ff58e2df636f76d48ba95b50d4133ed6bd9cdc80815ac286e8c5286607c1a4e68111362b9e432e8311bd3b57264131ed\"}]}'
     );
 
 INSERT INTO

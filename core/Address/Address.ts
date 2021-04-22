@@ -11,7 +11,7 @@ export function addressVerify(original: string, signed: string, publicKey: strin
     return ec.verify(original, signed, publicKey, 'hex');
 }
 
-export function addressCreate(string: string, privateKey: string): Address {
+export function addressCreate(): Address {
     var key = ec.genKeyPair();
     return new Address(key.getPublic().encode('hex'), key.getPrivate().toString('hex'));
 }
@@ -32,6 +32,11 @@ export default class Address {
 
     getPublic = (): string => {
         return this.public;
+    }
+
+    // @TODO remove ?
+    getPrivate = (): string | undefined => {
+        return this.private;
     }
 
     getHashed = (): string => {

@@ -9,6 +9,7 @@ import EventsManager from "../Events/EventManager";
 import BlockValidator from "../Validator/BlockValidator";
 import { MinedResult } from "../Service/MiningService";
 import UtxoRepo from "./UtxoRepo";
+import TransactionInput from "../Block/TransactionInput";
 
 const NAMESPACE = 'block';
 const BLOCK_FACTORY = new BlockFactory;
@@ -152,6 +153,15 @@ export default class BlockRepo {
                 for (let i in block.transactionsNames) {
                     block.transactions.push(await this.transactionRepo.getTransactionByName(block.transactionsNames[i]));
                     block.transactions[i].block = block;
+
+                    if (!block.transactions[i].isCoinbase()) {
+                        for (let o in block.transactions[i].inputs) {
+                            block.transactions[i].inputs[o].output = await this.transactionRepo.getOutput(
+                                block.transactions[i].inputs[o].transactionName,
+                                block.transactions[i].inputs[o].outputNum
+                            );
+                        }
+                    }
                 }
                 resolve(block);
             } catch (error) {

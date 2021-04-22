@@ -19,8 +19,7 @@ export default class BlockValidator {
     }
 
     isBlockValid = (block: Block): boolean => {
-
-        if (!block.transactions.length) {
+        if (!block.transactions || !block.transactions.length) {
             console.error('Block without transactions is not accepted');
             return false;
         }
@@ -46,6 +45,12 @@ export default class BlockValidator {
     }
 
     isTransactionValid = (transaction: Transaction): boolean => {
+        // @TODO check for dublciated inputs
+
+        if (!transaction) {
+            return false;
+        }
+
         if (!transaction.inputs.length) {
             console.error('Transaction with empty inputs');
             return false;
@@ -62,13 +67,18 @@ export default class BlockValidator {
 
         let inputValue = 0;
         let outputValue = 0;
-
+        let refOutputs = {};
         for (let i in transaction.inputs) {
             if (!this.isInputValid(transaction.inputs[i])) {
                 console.error('Input is invalid');
                 return false;
             }
             inputValue += transaction.inputs[i].getValue();
+        }
+
+        if (this.hasTransactionInputsOverlap(transaction)) {
+            console.log('has overlaping input outputs');
+            return false;
         }
 
         for (let o in transaction.outputs) {
@@ -85,6 +95,19 @@ export default class BlockValidator {
         }
 
         return true;
+    }
+
+    hasTransactionInputsOverlap = (transaction: Transaction): boolean => {
+        let refOptuts: any = {};
+        let input: TransactionInput;
+        for (input of transaction.inputs) {
+            if (undefined === refOptuts[input.transactionName + '.' + input.outputNum]) {
+                refOptuts[input.transactionName + '.' + input.outputNum] = 0;
+            }
+            refOptuts[input.transactionName + '.' + input.outputNum]++;
+        }
+
+        return Object.values(refOptuts).reduce((a, b) => a + b) > Object.keys(refOptuts);
     }
 
     isInputValid = (input: TransactionInput): boolean => {
@@ -142,10 +165,7 @@ export default class BlockValidator {
     }
 
     isOutputValidatorValid = (output: TransactionOutput): boolean => {
-        if (!addressVerify(output.transaction.block?.prevBlockName, output.getScriptValidatedHash(), output.getScriptAddress())) {
-            console.error('Invalid  coinbase output signed');
-            return false;
-        }
+        // dont validate at this time
         return true;
     }
 

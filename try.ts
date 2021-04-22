@@ -1,26 +1,10 @@
 import { validator, address1, blockModel, blockRepo, chainRepo, settingsRepo, transactionRepo, utxoRepo, currentAddress, getRandomTestAddress, poolRepo } from "./globals";
 import Block from "./core/Block/Block";
-import { addressCreate } from "./core/Address/Address";
+import Address, { addressCreate } from "./core/Address/Address";
 import Transaction from "./core/Block/Transaction";
 
 
 
-
-
-(async function () {
-    const amount = 5;
-    const utxos = await utxoRepo.getOutputsForValue(currentAddress, amount);
-    const transaction = blockModel.createPayToAddressTransaction(currentAddress, getRandomTestAddress(), utxos, amount / 2);
-    console.log(validator.isTransactionValid(transaction))
-    if (transaction) {
-        await poolRepo.addTransaction(transaction);
-    }
-
-
-})();
-
-
-//673233f112f35e2c39f6e74f9121373150cff1691f6292c0ebe7c476b2844ba1
 
 // (async function () {
 //     // const block = await blockRepo.getBlockByName('673233f112f35e2c39f6e74f9121373150cff1691f6292c0ebe7c476b2844ba1');

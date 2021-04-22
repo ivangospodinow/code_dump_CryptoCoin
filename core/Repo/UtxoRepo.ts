@@ -9,17 +9,16 @@ import StorageHandle from "../Storage/StorageHandle";
 import UtxoFactory from "../Factory/UtxoFactory";
 import Utxo from "../Block/Utxo";
 import Transaction from "../Block/Transaction";
+import TransactionInput from "../Block/TransactionInput";
 
 const NAMESPACE = 'utxo';
 const UTXO_FACTORY = new UtxoFactory;
 
 export default class UtxoRepo {
     storage: Storage;
-    transactionRepo: TransactionRepo;
 
-    constructor(storage: Storage, transactionRepo: TransactionRepo) {
+    constructor(storage: Storage) {
         this.storage = storage;
-        this.transactionRepo = transactionRepo;
     }
 
     getOutputByNameAndNum = (transactionName: string, outputNum: number): Promise<Utxo | undefined> => {
@@ -66,4 +65,15 @@ export default class UtxoRepo {
     //         resolve(transaction);
     //     }.bind(this));
     // }
+
+    async loadTransactionUtxos(transaction: Transaction): Promise<Transaction> {
+        let input: TransactionInput;
+        for (input of transaction.inputs) {
+            if (input.transactionName && undefined !== input.outputNum && input.outputNum >= 0) {
+                input.utxo = await this.getOutputByNameAndNum(input.transactionName, input.outputNum);
+            }
+        }
+
+        return transaction;
+    }
 }

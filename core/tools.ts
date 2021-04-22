@@ -74,3 +74,7 @@ export function numberToHex(number: number): number {
 export function unixTime(): number {
     return new Date().getTime() / 1000;
 }
+
+export function getStringBytes(string: string): number {
+    return (new TextEncoder().encode(string)).length;
+}

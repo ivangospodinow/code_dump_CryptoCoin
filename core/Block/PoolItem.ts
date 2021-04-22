@@ -3,17 +3,17 @@ import { sha256x2 } from "../tools";
 import Transaction from "./Transaction";
 
 export type PoolItemConstructor = {
-    transactions: Transaction[],
+    transaction: Transaction,
 };
 
 export default class PoolItem {
-    public transactions: Transaction[];
+    public transaction: Transaction;
 
     constructor(data: PoolItemConstructor) {
-        this.transactions = data['transactions'];
+        this.transaction = data['transaction'];
     }
 
     getName(): string {
-        return sha256x2(this.transactions.map(transaction => transaction.getName()).join(''));
+        return this.transaction.name;
     }
 }

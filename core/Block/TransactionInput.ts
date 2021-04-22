@@ -2,6 +2,7 @@ import Transaction from "./Transaction";
 import settings from "../../settings";
 import Utxo from "./Utxo";
 import ScriptAware from "./ScriptAware";
+import TransactionOutput from "./TransactionOutput";
 
 export type TransactionInputConstructor = {
     num: number,
@@ -20,6 +21,7 @@ export default class TransactionInput extends ScriptAware {
 
     public transaction: Transaction;
     public utxo?: Utxo;
+    public output?: TransactionOutput;
 
     constructor(data: TransactionInputConstructor) {
         super(data);
@@ -36,8 +38,10 @@ export default class TransactionInput extends ScriptAware {
             return settings.BLOCK_REWARD;
         } else if (this.utxo) {
             return this.utxo.getValue();
+        } else if (this.output) {
+            return this.output.getValue();
         }
-        console.error('Check for referenced output', this.utxo)
+        console.error('Check for referenced output', this.output)
         return 0;
     }
 

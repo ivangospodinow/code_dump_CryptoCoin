@@ -19,14 +19,16 @@ import Address from './core/Address/Address';
 import EventsManager from './core/Events/EventManager';
 import ChainRepo from './core/Repo/ChainRepo';
 import { rand } from './core/tools';
+import PoolItemFactory from './core/Factory/PoolItemFactory';
+import TransactionFactory from './core/Factory/TransactionFactory';
 
 export const eventsManager = new EventsManager;
 export const mysqlStorage = new MysqlStorage(settings.mysql);
 export const storage = new Storage(mysqlStorage);
 export const settingsRepo = new SettingsRepo(storage);
 
-
-export const transactionRepo = new TransactionRepo(storage);
+export const utxoRepo = new UtxoRepo(storage);
+export const transactionRepo = new TransactionRepo(storage, utxoRepo);
 
 
 export const queueService = new QueueService;
@@ -34,12 +36,12 @@ export const blockModel = new BlockModel(storage);
 export const validator = new BlockValidator(blockModel);
 
 
-export const utxoRepo = new UtxoRepo(storage, transactionRepo);
+
 
 export const blockRepo = new BlockRepo(storage, transactionRepo, settingsRepo, eventsManager, validator, utxoRepo); 0
 export const queueRepo = new QueueRepo(storage);
 export const chainRepo = new ChainRepo(storage, settingsRepo, validator, blockRepo, eventsManager);
-export const poolRepo = new PoolRepo(storage);
+export const poolRepo = new PoolRepo(storage, utxoRepo, eventsManager);
 
 export const mining = new MiningService(settingsRepo, blockModel, blockRepo, poolRepo, eventsManager, chainRepo);
 // @TODO fix coupling 
@@ -53,9 +55,10 @@ export const apiService = new ApiService(clientService, settingsRepo, blockModel
 
 export const addressService = new AddressService(settingsRepo, blockRepo);
 
-
-
+export const BLOCK_VALIDATOR = new BlockValidator(blockModel);
 export const BLOCK_FACTORY = new BlockFactory;
+export const POOL_ITEM_FACTORY = new PoolItemFactory;
+export const TRANSACTION_FACTORY = new TransactionFactory;
 
 export const currentAddress = new Address(settings['addresses'][settings.NODE]['public'], settings['addresses'][settings.NODE]['private']);
 
@@ -66,10 +69,6 @@ export const address3 = new Address(settings['addresses'][2]['public'], settings
 export const TMP_MINING_ADDRESS = new Address(settings['addresses'][settings.NODE]['public'], settings['addresses'][settings.NODE]['private']);
 
 export function getRandomTestAddress(): Address {
-    switch (rand(1, 3)) {
-        case 1: return address1;
-        case 2: return address2;
-        case 3: return address3;
-
-    }
+    let addrPair = settings.addresses[rand(0, settings.addresses.length - 1)];
+    return new Address(addrPair['public'], addrPair['private']);
 }

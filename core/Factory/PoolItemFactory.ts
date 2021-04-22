@@ -11,20 +11,16 @@ export default class PoolItemFactory {
         return this.createFromObject(json(input))
     }
 
-    createFromObject = (object: { transactions: TransactionConstructor[] }): PoolItem => {
+    createFromObject = (object: { transaction: TransactionConstructor }): PoolItem => {
 
         return new PoolItem({
-            transactions: object.transactions.map(function createTransactionFromArray(transactionData: TransactionConstructor) {
-                return TRANSACTION_FACTORY.createFromObject(transactionData);
-            }),
+            transaction: TRANSACTION_FACTORY.createFromObject(object['transaction']),
         });
     }
 
     createArrayFromObject = (poolItem: PoolItem) => {
         return {
-            transactions: poolItem.transactions.map(function createArrayFromTransactoon(transaction: Transaction) {
-                return TRANSACTION_FACTORY.createArrayFromObject(transaction);
-            }),
+            transaction: TRANSACTION_FACTORY.createArrayFromObject(poolItem.transaction),
         };
     }
 }

@@ -1,6 +1,7 @@
 import Block from "./Block";
 import TransactionInput from "./TransactionInput";
 import TransactionOutput from "./TransactionOutput";
+import { getStringBytes } from '../tools';
 
 export type TransactionConstructor = {
     num: number,
@@ -51,5 +52,12 @@ export default class Transaction {
 
     getName = (): string => {
         return this.name;
+    }
+
+    getSizeInBytes = (): number => {
+        return getStringBytes([
+            this.inputs.map(input => input.script).join(''),
+            this.outputs.map(output => output.script).join(''),
+        ].join(''));
     }
 }

@@ -78,39 +78,56 @@ export default class BlockModel {
     /**
      * @TODO Move to transaction repo
      */
-    createPayToAddressTransaction = (from: Address, to: Address, utxos: Array<Utxo>, amount: number): ?Transaction => {
+    createPayToAddressTransaction = (from: Address, to: Address, utxos: Array<Utxo>, amount: number): Transaction | undefined => {
         // in case float is passed
         amount = formatAmount(amount);
+        if (amount < 1) {
+            return undefined;
+        }
 
         const transaction = new Transaction({
             num: 0,
             name: '',
         });
         let utxoValue = 0;
-
-        transaction.inputs = utxos.map(function createTransactionMapInputs(utxo: Utxo, num: number): TransactionInput {
+        let inputNum = 0;
+        let utxo: Utxo;
+        transaction.inputs = [];
+        for (utxo of utxos) {
             utxoValue += utxo.value;
-            return new TransactionInput({
-                num,
+            transaction.inputs.push(new TransactionInput({
+                num: inputNum++,
                 outputNum: utxo.outputNum,
                 transactionName: utxo.transactionName,
                 script: 'SIGN ' + from.sign(utxo.createSignValue()) + ' ADDRESS ' + from.getPublic(),
                 transaction,
                 utxo,
-            });
-        })
+            }));
+            if (utxoValue >= amount) {
+                break;
+            }
+        }
+
+
+
+        /**
+         * If the address is the same, no need for two outputs
+         */
+        if (from.getPublic() === to.getPublic()) {
+            amount = utxoValue;
+        }
 
         transaction.outputs.push(new TransactionOutput({
             num: 0,
-            value: amount,
+            value: amount > utxoValue ? utxoValue : amount,
             script: 'PPK ' + to.getPublic(),
             transaction
         }));
 
-        if (amount > utxoValue) {
-            console.error('new transaction value is bigger than requested');
-            return null;
-        }
+        // if (amount > utxoValue) {
+        //     console.error('new transaction value is bigger than requested');
+        //     return null;
+        // }
 
         if (utxoValue - amount > 0) {
             transaction.outputs.push(new TransactionOutput({

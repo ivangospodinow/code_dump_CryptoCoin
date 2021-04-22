@@ -9,18 +9,23 @@ import PoolRepo from "../Repo/PoolRepo";
 import BlockValidator from "../Validator/BlockValidator";
 import { sha256x2, getSecondsBetweenDates, rand } from "../tools";
 import { IncomingMessage, ServerResponse } from "http";
-import { BLOCK_FACTORY } from "../../globals";
+import { BLOCK_FACTORY, TRANSACTION_FACTORY } from "../../globals";
 import { isNumber } from "util";
 import ClientService from "./ClientService";
 import ChainRepo from "../Repo/ChainRepo";
+import { TransactionConstructor } from '../Block/Transaction';
+
 const bcrypt = require('bcrypt');
 
 export default class ApiService {
     methods: { [key: string]: string } = {
         'GET.getBlocks': 'getBlocks',
+        'GET.getBlock': 'getBlock',
         'GET.getChainHeight': 'getChainHeight',
         'POST.propagateBlock': 'propagateBlock',
+        'POST.propagatePoolItem': 'propagatePoolItem',
     };
+
     settingsRepo: SettingsRepo;
     blockModel: BlockModel;
     blockRepo: BlockRepo;
@@ -75,6 +80,16 @@ export default class ApiService {
         res.end();
     }
 
+    async getBlock(query: { name: string }) {
+        return {
+            block: BLOCK_FACTORY.createArrayFromObject(
+                await this.blockRepo.loadFullBlock(
+                    await this.blockRepo.getBlockByName(query.name)
+                )
+            ),
+        };
+    }
+
     async getBlocks(query: { height: number | string }) {
         if (!isNumber(query['height'])) {
             query['height'] = parseInt(query['height']);
@@ -103,17 +118,28 @@ export default class ApiService {
     }
 
     async propagateBlock(_, post: { block?: BlockConstructor }) {
-        if (post['block']) {
-            setTimeout(async function addBlockToQueue(this: ApiService) {
-                if (post['block']) {
-                    console.log('block received ', post['block']['height'])
-                    this.chainRepo.addBlock(BLOCK_FACTORY.createFromObject(post['block']))
-                } else {
-                    console.log('Block not available ?')
-                }
+
+        setTimeout(async function addBlockToQueue(this: ApiService) {
+            if (undefined !== post['block']) {
+                console.log('block received ', post['block']['height'])
+                this.chainRepo.addBlock(BLOCK_FACTORY.createFromObject(post['block']));
+            }
+            return true;
+        }.bind(this));
+
+        return { sucess: true };
+    }
+
+    async propagatePoolItem(_, post: { poolItem?: TransactionConstructor }) {
+
+        setTimeout(async function addPoolItemToQueue(this: ApiService) {
+            if (undefined !== post['poolItem']) {
+                this.poolRepo.addTransaction(TRANSACTION_FACTORY.createFromObject(post['poolItem']));
                 return true;
-            }.bind(this));
-        }
+            }
+        }.bind(this));
+
+
         return { sucess: true };
     }
 }

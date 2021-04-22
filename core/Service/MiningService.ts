@@ -12,6 +12,9 @@ import EventsManager from "../Events/EventManager";
 import { resolveAny } from "dns";
 import ChainRepo from "../Repo/ChainRepo";
 import { parse } from "path";
+import PoolItem from "../Block/PoolItem";
+import TransactionInput from "../Block/TransactionInput";
+import Transaction from "../Block/Transaction";
 const bcrypt = require('bcrypt');
 
 export type MineResult = { nonce: string, target: number, hash: number, weight: number };
@@ -28,6 +31,8 @@ export default class MiningService {
     chainRepo: ChainRepo;
     blockAdded?: Block;
 
+    protected invalidPoolItemsToRemove: Array<string> = [];
+
     constructor(settingsRepo: SettingsRepo, blockModel: BlockModel, blockRepo: BlockRepo, poolRepo: PoolRepo, eventsManager: EventsManager, chainRepo: ChainRepo) {
         this.settingsRepo = settingsRepo;
         this.blockModel = blockModel;
@@ -40,6 +45,20 @@ export default class MiningService {
         // this.eventsManager.on('blockAdded', function blockAddedEventCallback(block: Block) {
         //     BLOCK_ADDED = block;
         // });
+
+        let poolItemsCleaned: boolean;
+        let poolItemsToClean: Array<string>;
+        setInterval(async () => {
+            poolItemsToClean = [...this.invalidPoolItemsToRemove];
+            this.invalidPoolItemsToRemove = [];
+
+            if (poolItemsToClean.length) {
+                poolItemsCleaned = await this.poolRepo.clearInvalidPoolItems(poolItemsToClean);
+                if (!poolItemsCleaned) {
+                    this.invalidPoolItemsToRemove = [...this.invalidPoolItemsToRemove, ...poolItemsToClean];
+                }
+            }
+        }, settings.POOL_CLEANUP_CHECK_INTERVAL_MS);
     }
 
     // createAndMineNextBlock = (address: Address): Promise<Block> => {
@@ -64,14 +83,77 @@ export default class MiningService {
         const lastBlock = await this.blockRepo.getBlockByName(await this.settingsRepo.getLastBlockName());
         const block = this.blockModel.createCandidate(address, lastBlock);
         block.timestamp = getTimestampString();
-        // const poolTransactions = await this.poolRepo.getTransactionsForBlockMining();
-        // for (let t in poolTransactions) {
-        //     block.transactions.push(poolTransactions[t]);
-        // }
+
+
+        const poolTransactionsHandle = this.poolRepo.getTransactionsHandle();
+        let poolItem: PoolItem | null;
+        let sizeinBytes: number = 0;
+        while (poolTransactionsHandle.hasData()) {
+            if (poolItem = await poolTransactionsHandle.next()) {
+                if (sizeinBytes + poolItem.transaction.getSizeInBytes() < settings.BLOCK_SIZE_BYTES) {
+                    if (this.isPoolItemInBlockValid(poolItem, block)) {
+                        block.transactions.push(poolItem.transaction);
+                    } else {
+                        this.invalidPoolItemsToRemove.push(poolItem.getName());
+                        console.log('Pool item is invalid tx:', poolItem.transaction.name);
+                    }
+                } else {
+                    break;
+                }
+            }
+        }
+        console.log('MINING BLOCK TRANSACTIONS ', block.transactions.length)
 
         this.blockModel.prepareCandidate(block);
-        // console.log('Block candidate created ' + block.height);
+        // for (let tx of block.transactions) {
+        //     if (!tx.isCoinbase()) {
+        //         for (let int of tx.inputs) {
+        //             console.log('INPUT ', int.transactionName, int.outputNum)
+        //         }
+        //     }
+        // }
+        // process.exit();
+
         return block;
+    }
+
+    /**
+     * Checks
+     * @param poolItem
+     * @param block 
+     * @returns 
+     */
+    isPoolItemInBlockValid = (poolItem: PoolItem, block: Block): boolean => {
+        let valid = true;
+        let inputInBLock = false;
+        let poolInput: TransactionInput;
+        let blockInput: TransactionInput;
+        let blockTransaction: Transaction;
+
+        for (poolInput of poolItem.transaction.inputs) {
+            if (!poolInput.utxo) {
+                valid = false;
+                break;
+            }
+            inputInBLock = false;
+            for (blockTransaction of block.transactions) {
+                for (blockInput of blockTransaction.inputs) {
+                    if (blockInput.transactionName === poolInput.transactionName
+                        && blockInput.outputNum === poolInput.outputNum) {
+                        inputInBLock = true;
+                        break;
+                    }
+                }
+                if (inputInBLock) {
+                    valid = false;
+                    break;
+                }
+            }
+            if (!valid) {
+                break;
+            }
+        }
+        return valid;
     }
 
     mine = (block: Block, address: Address): Promise<MineResult> => {

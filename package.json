@@ -9,7 +9,8 @@
     "try": "ts-node-dev --respawn --transpileOnly ./try.ts",
     "dbreset": "ts-node-dev ./dbreset.ts",
     "mine": "ts-node-dev ./mine.ts",
-    "app": "ts-node-dev ./index.ts"
+    "app": "ts-node-dev ./index.ts",
+    "validator": "ts-node-dev ./validator.ts"
   },
   "author": "",
   "license": "ISC",
