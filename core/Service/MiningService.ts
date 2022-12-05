@@ -7,7 +7,7 @@ import Address from "../Address/Address";
 import BlockRepo from "../Repo/BlockRepo";
 import PoolRepo from "../Repo/PoolRepo";
 import BlockValidator from "../Validator/BlockValidator";
-import { sha256x2, getSecondsBetweenDates, numberToHex, getTimestampString } from "../tools";
+import { sha256x2, numberToHex, unixTime } from "../tools";
 import EventsManager from "../Events/EventManager";
 import { resolveAny } from "dns";
 import ChainRepo from "../Repo/ChainRepo";
@@ -82,7 +82,7 @@ export default class MiningService {
     async createNextBlock(address: Address): Promise<Block> {
         const lastBlock = await this.blockRepo.getBlockByName(await this.settingsRepo.getLastBlockName());
         const block = this.blockModel.createCandidate(address, lastBlock);
-        block.timestamp = getTimestampString();
+        block.timestamp = unixTime();
 
 
         const poolTransactionsHandle = this.poolRepo.getTransactionsHandle();
@@ -95,7 +95,8 @@ export default class MiningService {
                         block.transactions.push(poolItem.transaction);
                     } else {
                         this.invalidPoolItemsToRemove.push(poolItem.getName());
-                        console.log('Pool item is invalid tx:', poolItem.transaction.name);
+                        // @TODO uncomment for debug
+                        // console.log('Pool item is invalid tx:', poolItem.transaction.name);
                     }
                 } else {
                     break;
@@ -224,29 +225,34 @@ export default class MiningService {
 
     verifyMinedBlock = (block: Block): Promise<boolean> => {
         return new Promise(async function getMininResultPromise(this: MiningService, resolve: CallableFunction, reject: any) {
+
             const target = await this.getTarget(block);
 
             bcrypt.hash(this.createMiningHashBase(block), block.nonce, function (err: any, hash: string) {
                 if (err) {
+                    console.error(err);
                     return reject(err);
                 }
 
                 const coinBaseAddress = block.getCoinBaseAddress();
                 if (!coinBaseAddress) {
+                    console.log('No coinbase address')
                     return resolve(false);
                 }
 
                 let result = sha256x2(hash);
                 if (!coinBaseAddress.verify(result, block.hash)) {
+                    console.error('Unable to verify mined address')
                     return resolve(false);
                 }
 
                 let minedResult = parseInt(sha256x2(block.hash), 16);
+
                 // 5% tolerance 
                 if (minedResult <= target * 1.05) {
                     return resolve(true);
                 }
-
+                console.log(minedResult, '<= ', target * 1.05)
                 return resolve(false);
             });
         }.bind(this));
@@ -298,26 +304,31 @@ export default class MiningService {
 
             // return resolve(settings.FIRST_TARGET);
 
+
             const prevTarget = await this.blockRepo.getBlockTargetByName(block.prevBlockName);
-            console.log('prevTarget ' + prevTarget, parseInt(prevTarget, 16));
             if ((block.height - 1) % settings.TARGET_BLOKC_TIME_REAJUST !== 0) {
                 return resolve(parseInt(prevTarget, 16));
             }
+
+            console.log('HERE')
             // console.log('prevBlockName ' + block.prevBlockName);
             const lastBlockTimestamp = await this.blockRepo.getBlockTimestampByName(block.prevBlockName);
             const startBlockTimestamp = await this.blockRepo.getBlockTimestampByName(
                 await this.chainRepo.getHeightBlock(block.height - settings.TARGET_BLOKC_TIME_REAJUST)
             );
 
-            const timeElapsed = getSecondsBetweenDates(lastBlockTimestamp, startBlockTimestamp);
-            console.log('time elapsed ', timeElapsed)
+            const timeElapsed = lastBlockTimestamp - startBlockTimestamp;
+
+            // console.log(startBlockTimestamp, lastBlockTimestamp, timeElapsed)
+            // console.log('time elapsed ', timeElapsed)
             let ratio = (timeElapsed / (settings.TARGET_BLOKC_TIME_REAJUST * settings.TARGET_BLOKC_TIME_SEC));
-            // if (ratio > 1.05) {
-            //     ratio = 1.05
-            // } else if (ratio < 0.95) {
-            //     ratio = 0.95;
-            // }
-            console.log('difficulty ratio ' + ratio)
+            if (ratio > 1.05) {
+                ratio = 1.05
+            } else if (ratio < 0.95) {
+                ratio = 0.95;
+            }
+
+            // console.log('difficulty ratio ' + ratio)
             // console.log('getTarget', ratio, lastBlockTimestamp, startBlockTimestamp)
             // console.log('timeElapsed ' + timeElapsed);
             // console.log('lastBlockTimestamp ' + lastBlockTimestamp);

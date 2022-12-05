@@ -1,26 +1,35 @@
 import Block, { BlockStatusType, BLOCK_STATUS_MINED, BLOCK_STATUS_VALID, BLOCK_STATUS_VALID_FORK, BLOCK_STATUS_INVALID } from "../Block/Block";
-import Storage from "../Storage/Storage";
+import Storage, { DATA_REMOVE_VALUE } from "../Storage/Storage";
 import { json } from "../tools";
 import settings from '../../settings';
 import SettingsRepo from "./SettingsRepo";
 import BlockValidator from "../Validator/BlockValidator";
 import BlockRepo from "./BlockRepo";
-import { miningService } from "../../globals";
+import { BLOCK_FACTORY, BLOCK_VALIDATOR, chainValidator, miningService, UTXO_FACTORY } from "../../globals";
 import MiningService from "../Service/MiningService";
 import EventsManager from "../Events/EventManager";
-
+import UtxoRepo from "./UtxoRepo";
+import Transaction from "../Block/Transaction";
+import TransactionInput from "../Block/TransactionInput";
+import TransactionOutput from "../Block/TransactionOutput";
+const fs = require('fs');
 
 export const NAMESPACE = 'chain';
 
 export type QueueType = { block: Block, resolve: CallableFunction, reject: any };
+export type ChainType = Array<Block>;
+export type ChainsType = Array<ChainType>;
 
 export default class ChainRepo {
+    public replay = true;
+
     storage: Storage;
     settingsRepo: SettingsRepo;
     validator: BlockValidator;
     blockRepo: BlockRepo;
     miningService: MiningService;
     eventsManager: EventsManager;
+    utxoRepo: UtxoRepo;
 
     private queue: Array<QueueType> = [];
     private queueInterval: any;
@@ -30,16 +39,20 @@ export default class ChainRepo {
         settingsRepo: SettingsRepo,
         validator: BlockValidator,
         blockRepo: BlockRepo,
-        eventsManager: EventsManager
+        eventsManager: EventsManager,
+        utxoRepo: UtxoRepo
     ) {
         this.storage = storage;
         this.settingsRepo = settingsRepo;
         this.validator = validator;
         this.blockRepo = blockRepo;
         this.eventsManager = eventsManager;
+        this.utxoRepo = utxoRepo;
 
         let queue: QueueType | undefined;
         let processing: boolean = false;
+
+
 
         this.queueInterval = setInterval(async function (this: ChainRepo) {
             if (!processing) {
@@ -123,8 +136,18 @@ export default class ChainRepo {
 
     processQueuedBlock = (block: Block) => {
         return new Promise(async function addBlockPrimise(this: ChainRepo, resolve: CallableFunction, reject: any) {
+
+            if (this.replay) {
+                fs.appendFile(__dirname + '/../../replay_' + settings.NODE + '.txt', BLOCK_FACTORY.createStringFromObject(block) + "\n", function (err) {
+                    if (err) throw err;
+                    console.log('Saved!');
+                });
+            }
+
+
             const heightBlockNames: Array<string> = await this.getHeightBlockNames(block.height);
             if (heightBlockNames.includes(block.name)) {
+                console.log('Block name already in height', block.name);
                 return resolve(false);
             }
 
@@ -137,22 +160,53 @@ export default class ChainRepo {
                     heightBlockNames.push(block.name);
                     await this.setHeightBlockNames(block.height, heightBlockNames);
                     await this.setActiveBlockForHeight(block);
+                } else {
+                    console.log('Block(mined) name could not be stored to database', block.name);
                 }
                 return resolve(blockAdded);
             }
 
             block.status = BLOCK_STATUS_INVALID;
             if (!await this.miningService.verifyMinedBlock(block)) {
+                console.log('Block unable to verify mining data', block.name, block.height);
                 return resolve(false);
             }
 
-            if (!this.validator.isBlockValid(block)) {
-                return resolve(false);
-            }
+            // @TODO utxo can be spent in current best chain
+            // if (!this.validator.isBlockValid(block)) {
+            //     return resolve(false);
+            // }
 
             // @TODO validate UTXO
 
-            block.status = heightBlockNames.length === 0 ? BLOCK_STATUS_VALID : BLOCK_STATUS_VALID_FORK;
+            // received new block
+            if (heightBlockNames.length === 0) {
+                block = await this.utxoRepo.loadBlockUtxos(block);
+                if (this.validator.isBlockValid(block)) {
+                    block.status = BLOCK_STATUS_VALID;
+                    blockAdded = await this.blockRepo.addBlock(block);
+                    if (blockAdded) {
+                        heightBlockNames.push(block.name);
+                        await this.setHeightBlockNames(block.height, heightBlockNames);
+                        await this.setActiveBlockForHeight(block);
+                    } else {
+                        console.log('Unable to store block', block.name);
+                    }
+                    return resolve(blockAdded);
+                } else {
+                    console.log('Block could not be validated', block.name);
+                    return resolve(false);
+                }
+            }
+
+            // console.log('resolve utxo for valid fork')
+            // process.exit();
+
+            // @TODO chain length must be validated, may be not needed because blocks to common root are loaded and it can be calcualted easy
+
+            console.log('RESOLVE BEST CHAIN')
+            // @TODO may be invalid ?
+            block.status = BLOCK_STATUS_VALID_FORK;
             blockAdded = await this.blockRepo.addBlock(block);
             if (!blockAdded) {
                 return resolve(false);
@@ -160,11 +214,14 @@ export default class ChainRepo {
             heightBlockNames.push(block.name);
             await this.setHeightBlockNames(block.height, heightBlockNames);
 
-            if (heightBlockNames.length > 1) {
-                await this.resolveBestChain(heightBlockNames);
-            } else {
-                await this.setActiveBlockForHeight(block);
+            const bestChainResult = await this.resolveBestChain(heightBlockNames);
+
+            const isChainValid = await chainValidator.isNodeValid();
+            if (!isChainValid) {
+                console.log('chain invalid', 'best chain result ', bestChainResult);
+                process.exit();
             }
+
 
             return resolve(true);
 
@@ -235,11 +292,11 @@ export default class ChainRepo {
     //     }.bind(this));
     // }
 
-    private resolveBestChain = (heightBlockNames: Array<string>): Promise<Block | undefined> => {
+    private resolveBestChain = (heightBlockNames: Array<string>): Promise<boolean> => {
         return new Promise(async function resolveBestChainPrimise(this: ChainRepo, resolve: CallableFunction, reject: any) {
             let topBlock: Block | undefined;
             let loopBlock: Block;
-            let topBlocks: Array<Block> = [];
+            let topBlocks: ChainType = [];
 
             for (let name of heightBlockNames) {
                 loopBlock = await this.getChainTop(name);
@@ -255,7 +312,27 @@ export default class ChainRepo {
                 return resolve(undefined);
             }
 
-            const chains = await this.getBlocksChains(topBlocks);
+            console.log('Top block name: ', topBlock.name)
+
+            let chains = await this.getBlocksChains(topBlocks);
+            for (let ch of chains) {
+                console.log('chain: ', ch[0].height)
+            }
+
+
+            // console.log('chains', chains)
+            const chainsDisconected = await this.disconnectChains(chains);
+            if (!chainsDisconected) {
+                return resolve(false);
+            }
+            chains = await this.reloadChains(chains);
+            chains = await this.filterInvalidChains(chains);
+            // validate chains
+            if (!chains.length) {
+                console.log('All chains invalid ???')
+                return resolve(false);
+            }
+
             let i: any;
             let topCainKey: any;
             let topChainWeight: number = 0;
@@ -267,18 +344,25 @@ export default class ChainRepo {
                 }
             }
 
-            let data = this.createChainStatusUpdate(chains[topCainKey], [], BLOCK_STATUS_VALID);
+            console.log('Top chain key', topCainKey);
+
+            let data: Array<any> = [];
+            // @TODO make only utxo
+            let block: Block;
+            for (block of chains[topCainKey]) {
+                data = [...data, ...this.blockRepo.getBlockData(block)];
+            }
+
+            data = [...data, ...this.createChainStatusUpdate(chains[topCainKey], BLOCK_STATUS_VALID)];
             let validForkData: Array<any>;
 
             /**
              * Tripple chain fork - 2 of the 3 may have common root and it can from the longest chain.
              * Exclude such blocks from setting status valid-fork
              */
-            let excludeBlocks: Array<string> = chains[topCainKey].map(topChainBlock => topChainBlock.name);
-
             for (i in chains) {
                 if (i != topCainKey) {
-                    validForkData = this.createChainStatusUpdate(chains[i], excludeBlocks, BLOCK_STATUS_VALID_FORK);
+                    validForkData = this.createChainStatusUpdate(chains[i], BLOCK_STATUS_VALID_FORK);
                     data = [...data, ...validForkData];
                 }
             }
@@ -296,34 +380,21 @@ export default class ChainRepo {
             });
 
             // @TODO transactions
+            /// aaaaaaaaaaaaaaaaaaaaaaaaaaa shit
+
+
 
             await this.storage.puts(data);
 
-            // @TODO recheck the logic
-            // @TODO enable for testing only
-            let lastHeight = await this.settingsRepo.getLastBlockHeight();
-            let blockName: string;
-            let status: string;
-            while (lastHeight > 0) {
-                blockName = await this.getHeightBlock(lastHeight);
-                status = await this.blockRepo.getBlockStatus(blockName);
-                if (status !== 'valid') {
-                    console.log(chains, data)
-                    console.log('Block height is not active ', lastHeight)
-                    process.exit();
-                }
-                lastHeight--;
-            }
-
-            resolve(topBlock);
+            resolve(true);
         }.bind(this));
     }
 
-    public getBlocksChains(topBlocks: Array<Block>): Promise<Array<Array<Block>>> {
+    public getBlocksChains(topBlocks: ChainType): Promise<ChainsType> {
         return new Promise(async function resolveBestChainPrimise(this: ChainRepo, resolve: CallableFunction, reject: any) {
-            console.log('getBlocksChains')
+
             let lowestChainHeight = Number.MAX_SAFE_INTEGER;
-            let chains: Array<Array<Block>> = [];
+            let chains: ChainsType = [];
 
             let tmpBlock: Block;
 
@@ -335,13 +406,13 @@ export default class ChainRepo {
             });
 
             let addedBlock: boolean = false;
-
+            console.log('lowestChainHeight ', lowestChainHeight)
             while (true) {
                 addedBlock = false;
                 for (let i in chains) {
                     tmpBlock = chains[i][chains[i].length - 1];
                     if (tmpBlock.height > lowestChainHeight) {
-                        chains[i].push(await this.blockRepo.getBlockByName(tmpBlock.prevBlockName));
+                        chains[i].push(await this.blockRepo.loadFullBlockByName(tmpBlock.prevBlockName));
                         addedBlock = true;
                     }
                 }
@@ -351,6 +422,7 @@ export default class ChainRepo {
             }
 
             if (this.chainsHaveSameBottom(chains)) {
+                console.log('First has same bottom')
                 return resolve(chains);
             }
 
@@ -359,7 +431,7 @@ export default class ChainRepo {
                 for (let i in chains) {
                     tmpBlock = chains[i][chains[i].length - 1];
                     if (tmpBlock.prevBlockName) {
-                        chains[i].push(await this.blockRepo.getBlockByName(tmpBlock.prevBlockName));
+                        chains[i].push(await this.blockRepo.loadFullBlockByName(tmpBlock.prevBlockName));
                         addedBlock = true;
                     }
                 }
@@ -376,9 +448,9 @@ export default class ChainRepo {
         }.bind(this));
     }
 
-    private chainsHaveSameBottom(chains: Array<Array<Block>>): boolean {
+    private chainsHaveSameBottom(chains: ChainsType): boolean {
         let names: Array<string> = [];
-        let blocks: Array<Block>;
+        let blocks: ChainType;
         let block: Block;
 
         for (blocks of chains) {
@@ -390,25 +462,22 @@ export default class ChainRepo {
         return names.length === 1;
     }
 
-    private createChainStatusUpdate(chain: Array<Block>, excludeBlocks: Array<string>, status: BlockStatusType): Array<any> {
+    private createChainStatusUpdate(chain: ChainType, status: BlockStatusType): Array<any> {
         let block: Block;
         let data = [];
         for (block of chain) {
-            if (!excludeBlocks.includes(block.name)) {
+            data.push({
+                namespace: 'block',
+                key: block.name + '.status',
+                value: status,
+            });
+            if (status === 'valid') {
                 data.push({
-                    namespace: 'block',
-                    key: block.name + '.status',
-                    value: status,
+                    namespace: NAMESPACE,
+                    key: 'height.' + block.height,
+                    value: block.name,
                 });
-                if (status === 'valid') {
-                    data.push({
-                        namespace: NAMESPACE,
-                        key: 'height.' + block.height,
-                        value: block.name,
-                    });
-                }
             }
-
         }
         return data;
     }
@@ -439,20 +508,130 @@ export default class ChainRepo {
                     break;
                 }
             }
-            resolve(await this.blockRepo.getBlockByName(lastBlockName));
+
+            resolve(await this.blockRepo.loadFullBlockByName(lastBlockName));
         }.bind(this));
     }
+
+    /**
+     * @TODO fix this.
+     */
+    disconnectChains = (chains: ChainsType): Promise<boolean> => {
+
+        return new Promise(async function disconnectChainsPrimise(this: ChainRepo, resolve: CallableFunction, reject: any) {
+            let chain: ChainType;
+            let block: Block;
+            let transaction: Transaction;
+            let input: TransactionInput;
+            let output: TransactionOutput;
+
+            let add = [];
+            let remove = [];
+
+            for (chain of chains) {
+                for (block of chain) {
+
+                    // reset status of  block
+                    add.push({
+                        namespace: 'block',
+                        key: block.name + '.status',
+                        value: BLOCK_STATUS_VALID_FORK,
+                    });
+
+                    // remove block from current chain
+                    remove.push({
+                        namespace: NAMESPACE,
+                        key: 'height.' + block.height,
+                        value: DATA_REMOVE_VALUE,
+                    });
+
+                    for (transaction of block.transactions) {
+
+                        for (input of transaction.inputs) {
+                            if (input.output) {
+                                add.push({
+                                    namespace: 'utxo',
+                                    key: UTXO_FACTORY.createKeyFromOutputObject(input.output),
+                                    value: { blockHeight: block.height, ...UTXO_FACTORY.createArrayFromOutputObject(input.output) },
+                                });
+                            } else if (!input.isCoinbaseInput()) {
+                                console.error('Input -> output reference is required for non coinbase inputs.');
+                                process.exit();
+                            }
+
+                        }
+
+                        for (output of transaction.outputs) {
+                            remove.push({
+                                namespace: 'utxo',
+                                key: 'output.' + transaction.name + '.' + output.num,
+                                value: DATA_REMOVE_VALUE,
+                            });
+                        }
+                    }
+                }
+            }
+
+            let data = [...remove, ...add];
+            // console.log(data)
+            this.storage.puts(data).then(function () {
+                resolve(true);
+            }).catch(function () {
+                resolve(false);
+            });
+
+        }.bind(this));
+    }
+
+    reloadChains = (chains: ChainsType): Promise<ChainsType> => {
+        return new Promise(async function disconnectChainsPrimise(this: ChainRepo, resolve: CallableFunction, reject: any) {
+            const reloadedChains = [];
+            let reloadChain: ChainType;
+
+            let chain: ChainType;
+            let block: Block;
+
+            for (chain of chains) {
+                reloadChain = [];
+                for (block of chain) {
+                    reloadChain.push(await this.utxoRepo.loadBlockUtxos(await this.blockRepo.loadFullBlockByName(block.name)));
+
+                }
+                reloadedChains.push(reloadChain);
+            }
+
+            return resolve(reloadedChains);
+        }.bind(this));
+    }
+
+    filterInvalidChains = (chains: ChainsType): Promise<ChainsType> => {
+        return new Promise(async function disconnectChainsPrimise(this: ChainRepo, resolve: CallableFunction, reject: any) {
+            const validatedChains: ChainsType = [];
+            let chainIsValid: boolean = true;
+
+            let chain: ChainType;
+            let block: Block;
+
+            for (chain of chains) {
+                chainIsValid = true;
+                for (block of chain) {
+                    if (!BLOCK_VALIDATOR.isBlockValid(block)) {
+                        chainIsValid = false;
+                        console.log('Chain revalidate block invalid ', block.name, block.height);
+                        break;
+                    }
+                }
+
+                if (chainIsValid) {
+                    validatedChains.push(chain);
+                }
+            }
+
+            return resolve(validatedChains);
+        }.bind(this));
+    }
+
+
+
+
 }
-
-
-// data.push({
-//     namespace: 'setting',
-//     key: settings.LAST_BLOCK_HEIGHT_KEY,
-//     value: block.height,
-// });
-
-// data.push({
-//     namespace: 'setting',
-//     key: settings.LAST_BLOCK_NAME_KEY,
-//     value: block.name,
-// });

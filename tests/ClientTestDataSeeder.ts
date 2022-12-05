@@ -7,22 +7,32 @@ export default class ClientTestDataSeeder {
     }
 
     private continiusTransactionsSeed() {
-        setInterval(async function () {
-            let addr = getRandomTestAddress();
-            let amount = 0;
-            const utxos = await utxoRepo.getOutputsForValue(addr, amount);
-            for (let utxo of utxos) {
+        let addr = getRandomTestAddress();
+        let amount = 0;
+        let utxos;
+        let utxo;
+        let transaction;
+
+        async function loopData() {
+            addr = getRandomTestAddress();
+            amount = 0;
+            utxos = await utxoRepo.getOutputsForValue(addr, amount);
+            for (utxo of utxos) {
                 amount += utxo.getValue();
             }
             amount = Math.ceil(amount / 10000);
 
             if (utxos.length) {
-                const transaction = blockModel.createPayToAddressTransaction(addr, getRandomTestAddress(), utxos, amount);
+                transaction = blockModel.createPayToAddressTransaction(addr, getRandomTestAddress(), utxos, amount);
                 if (transaction) {
                     await poolRepo.addTransaction(transaction);
                 }
             }
-        }, 100);
+
+            setTimeout(loopData, 100);
+        }
+
+        loopData();
     }
 
 }

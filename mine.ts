@@ -1,7 +1,7 @@
 import Storage from './core/Storage/Storage';
 import MysqlStorage from './core/Storage/MysqlStorage';
 import settings from './settings';
-import { getTimestampString, hexToNumber, numberToHex, rand, reverseHex, sha256x2 } from './core/tools';
+import { hexToNumber, numberToHex, rand, reverseHex, sha256x2 } from './core/tools';
 import BlockModel from './core/Block/BlockModel';
 import Address from './core/Address/Address';
 import BlockRepo, { AddBlockOptions } from './core/Repo/BlockRepo';

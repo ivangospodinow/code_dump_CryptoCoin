@@ -21,6 +21,9 @@ import ChainRepo from './core/Repo/ChainRepo';
 import { rand } from './core/tools';
 import PoolItemFactory from './core/Factory/PoolItemFactory';
 import TransactionFactory from './core/Factory/TransactionFactory';
+import UtxoFactory from './core/Factory/UtxoFactory';
+import ChainValidator from './core/Validator/ChainValidator';
+
 
 export const eventsManager = new EventsManager;
 export const mysqlStorage = new MysqlStorage(settings.mysql);
@@ -38,9 +41,9 @@ export const validator = new BlockValidator(blockModel);
 
 
 
-export const blockRepo = new BlockRepo(storage, transactionRepo, settingsRepo, eventsManager, validator, utxoRepo); 0
+export const blockRepo = new BlockRepo(storage, transactionRepo, settingsRepo, eventsManager, validator, utxoRepo);
 export const queueRepo = new QueueRepo(storage);
-export const chainRepo = new ChainRepo(storage, settingsRepo, validator, blockRepo, eventsManager);
+export const chainRepo = new ChainRepo(storage, settingsRepo, validator, blockRepo, eventsManager, utxoRepo);
 export const poolRepo = new PoolRepo(storage, utxoRepo, eventsManager);
 
 export const mining = new MiningService(settingsRepo, blockModel, blockRepo, poolRepo, eventsManager, chainRepo);
@@ -51,6 +54,7 @@ export const miningService = mining;
 export const clientService = new ClientService(settingsRepo, blockModel, blockRepo, poolRepo, validator, queueService, mining, eventsManager, chainRepo);
 export const apiService = new ApiService(clientService, settingsRepo, blockModel, blockRepo, poolRepo, validator, chainRepo);
 
+export const chainValidator = new ChainValidator(settingsRepo, chainRepo, blockRepo);
 
 
 export const addressService = new AddressService(settingsRepo, blockRepo);
@@ -59,6 +63,7 @@ export const BLOCK_VALIDATOR = new BlockValidator(blockModel);
 export const BLOCK_FACTORY = new BlockFactory;
 export const POOL_ITEM_FACTORY = new PoolItemFactory;
 export const TRANSACTION_FACTORY = new TransactionFactory;
+export const UTXO_FACTORY = new UtxoFactory;
 
 export const currentAddress = new Address(settings['addresses'][settings.NODE]['public'], settings['addresses'][settings.NODE]['private']);
 

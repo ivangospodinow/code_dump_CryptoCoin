@@ -2,7 +2,7 @@ import { sha256x2 } from "../tools";
 import ScriptAware from "./ScriptAware";
 
 export type UtxoConstructor = {
-    blockHeight: number,
+    // blockHeight: number,
     transactionName: string,
     transactionNum: number,
     outputNum: number,
@@ -12,7 +12,7 @@ export type UtxoConstructor = {
 };
 
 export default class Utxo extends ScriptAware {
-    blockHeight: number;
+    // blockHeight: number;
     transactionName: string;
     transactionNum: number;
     outputNum: number;
@@ -21,7 +21,7 @@ export default class Utxo extends ScriptAware {
 
     constructor(data: UtxoConstructor) {
         super(data);
-        this.blockHeight = data['blockHeight'];
+        // this.blockHeight = data['blockHeight'];
         this.transactionName = data['transactionName'];
         this.transactionNum = data['transactionNum'];
         this.outputNum = data['outputNum'];

@@ -7,7 +7,7 @@ import Address from "../Address/Address";
 import BlockRepo from "../Repo/BlockRepo";
 import PoolRepo from "../Repo/PoolRepo";
 import BlockValidator from "../Validator/BlockValidator";
-import { sha256x2, getSecondsBetweenDates, rand } from "../tools";
+import { sha256x2, rand } from "../tools";
 import { IncomingMessage, ServerResponse } from "http";
 import { BLOCK_FACTORY, TRANSACTION_FACTORY } from "../../globals";
 import { isNumber } from "util";

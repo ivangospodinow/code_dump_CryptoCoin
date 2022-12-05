@@ -64,7 +64,7 @@ export default class PoolRepo {
             }
             if (data.length) {
                 await this.storage.puts(data);
-                this.eventsManager.emitNext('EVENT_POOL_ITEMS_ADDED', poolItemsData);
+                // this.eventsManager.emitNext('EVENT_POOL_ITEMS_ADDED', poolItemsData);
                 return resolve(true);
             } else {
                 return resolve(false);

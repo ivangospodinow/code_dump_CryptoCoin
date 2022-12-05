@@ -24,7 +24,7 @@ export default class BlockFactory {
             nonce: object['nonce'] || '',
             hash: object['hash'] || 0,
             prevBlockName: object['prevBlockName'] || '',
-            timestamp: object['timestamp'] || '',
+            timestamp: object['timestamp'] || undefined,
             transactionsNames: object['transactionsNames'] || [],
             transactions: (object.transactions || []).map(function createTransactionFromObject(transaction: TransactionConstructor) {
                 return TRANSACTION_FACTORY.createFromObject(transaction);
@@ -44,11 +44,13 @@ export default class BlockFactory {
             nonce: block.nonce,
             hash: block.hash,
             timestamp: block.timestamp,
+            transactionsNames: block.transactionsNames,
             transactions: block.transactions.map(function createArrayFromObjectMapTransactions(transaction: Transaction) {
                 return TRANSACTION_FACTORY.createArrayFromObject(transaction);
             }),
         };
     }
+
 
     createStringFromObject = (block: Block): string => {
         return JSON.stringify(this.createArrayFromObject(block));

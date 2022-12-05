@@ -4,8 +4,10 @@ import settings from './settings';
 import SettingsRepo from './core/Repo/SettingsRepo';
 import { address1, miningService, blockRepo, storage, settingsRepo, mysqlStorage, chainRepo } from './globals';
 import { MineResult } from './core/Service/MiningService';
-import { getTimestampString } from './core/tools';
+import { unixTime } from './core/tools';
 const fs = require('fs')
+
+// fs.unlink(__dirname + '/replay_' + settings.NODE + '.txt', () => { });
 
 const namespaces = [
     'chain',
@@ -23,7 +25,7 @@ let sql = namespaces.map((name) => {
 }).join('');
 
 sql += fs.readFileSync('data/reset.sql', 'utf8');
-sql = sql.replace(/2021-03-29T16:51:14.274Z/g, getTimestampString());
+sql = sql.replace(/2021-03-29T16:51:14.274Z/g, unixTime());
 
 
 mysqlStorage.connection.query(sql, [], async function queryCallback(error: any, result: any) {
@@ -56,7 +58,7 @@ mysqlStorage.connection.query(sql, [], async function queryCallback(error: any, 
     //         block.weight = resultResult['weight'];
     //         block.chainWeight = block.weight;
 
-    //         block.timestamp = getTimestampString();
+    //         block.timestamp = unixTime();
 
     //         await chainRepo.addBlock(block);
     //         console.log('done')

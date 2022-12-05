@@ -51,14 +51,6 @@ export function paddBlockHeight(height: number): string {
     return String(height).padStart(10, '0');
 }
 
-export function getTimestampString(): string {
-    return (new Date()).toISOString();
-}
-
-export function getSecondsBetweenDates(start: string, end: string): number {
-    return ((new Date(start)).getTime() - (new Date(end)).getTime()) / 1000;
-}
-
 export function isNumber(variable: any): boolean {
     return !isNaN(variable);
 }

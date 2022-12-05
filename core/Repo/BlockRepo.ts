@@ -1,7 +1,7 @@
 import Storage, { DATA_REMOVE_VALUE } from "../Storage/Storage";
 import Block, { BlockStatusType, BLOCK_STATUSES } from "../Block/Block";
 import settings from '../../settings';
-import { json, sha256x2, paddBlockHeight, getTimestampString } from "../tools";
+import { json, sha256x2, paddBlockHeight } from "../tools";
 import BlockFactory from "../Factory/BlockFactory";
 import TransactionRepo from "./TransactionRepo";
 import SettingsRepo from "./SettingsRepo";
@@ -10,6 +10,7 @@ import BlockValidator from "../Validator/BlockValidator";
 import { MinedResult } from "../Service/MiningService";
 import UtxoRepo from "./UtxoRepo";
 import TransactionInput from "../Block/TransactionInput";
+import { UTXO_FACTORY } from "../../globals";
 
 const NAMESPACE = 'block';
 const BLOCK_FACTORY = new BlockFactory;
@@ -95,8 +96,8 @@ export default class BlockRepo {
         // return this.getValueStringByKey('height.' + height);
     }
 
-    getBlockTimestampByName = (name: string): Promise<string> => {
-        return this.getValueStringByKey(name + '.timestamp');
+    getBlockTimestampByName = (name: string): Promise<number> => {
+        return this.getValueIntegerByKey(name + '.timestamp');
     }
 
     getBlockStatus = (name: string): Promise<BlockStatusType> => {
@@ -146,6 +147,12 @@ export default class BlockRepo {
         }.bind(this));
     }
 
+    loadFullBlockByName(blockName: string): Promise<Block> {
+        return new Promise(async function loadFullBlockByNamePrimise(this: BlockRepo, resolve: CallableFunction, reject: any) {
+            return resolve(await this.loadFullBlock(await this.getBlockByName(blockName)));
+        }.bind(this));
+    }
+
     loadFullBlock = (block: Block): Promise<Block> => {
         return new Promise(async function loadFullBlockPrimise(this: BlockRepo, resolve: CallableFunction, reject: any) {
             try {
@@ -191,7 +198,7 @@ export default class BlockRepo {
      */
     // validateAndAddBlock = (block: Block, minedResult: MinedResult): Promise<boolean> => {
     //     return new Promise(async function validateAndAddBlockPrimise(this: BlockRepo, resolve: CallableFunction, reject: any) {
-    //         block.timestamp = getTimestampString();
+    //         block.timestamp = unixTime();
 
     //         console.log('+ ' + block.height + ' ' + block.name);
 
@@ -321,187 +328,183 @@ export default class BlockRepo {
     addBlock = (block: Block): Promise<boolean> => {
         return new Promise(async function persistWithHeightNamesPromise(this: BlockRepo, resolve: CallableFunction, reject: any) {
 
-            let data = [];
-
-            // if (options.blockNamesForHeight.indexOf(block.name) === -1) {
-            //     options.blockNamesForHeight.push(block.name);
-            //     data.push({
-            //         namespace: 'block',
-            //         key: 'blocks.height.' + block.height,
-            //         value: options.blockNamesForHeight.join(','),
-            //     });
-            // }
-
-            data.push({
-                namespace: 'block',
-                key: block.name,
-                value: {
-                    name: block.name,
-                    height: block.height,
-                    weight: block.weight,
-                    chainWeight: block.chainWeight,
-                    target: block.target,
-                    nonce: block.nonce,
-                    hash: block.hash,
-                    prevBlockName: block.prevBlockName,
-                    timestamp: block.timestamp,
-                    transactionsNames: [],
-                }
-            });
-            const blockKey = data.length - 1;
-
-            if (block.height > 1) {
-                data.push({
-                    namespace: 'block',
-                    key: block.name + '.prevBlockName',
-                    value: block.prevBlockName,
-                });
-                data.push({
-                    namespace: 'block',
-                    key: block.prevBlockName + '.nextBlockName',
-                    value: block.name,
-                });
-            }
-
-            data.push({
-                namespace: 'block',
-                key: block.name + '.chainWeight',
-                value: block.chainWeight,
-            });
-
-            data.push({
-                namespace: 'block',
-                key: block.name + '.height',
-                value: block.height,
-            });
-
-            data.push({
-                namespace: 'block',
-                key: block.name + '.status',
-                value: block.status,
-            });
-
-            data.push({
-                namespace: 'block',
-                key: block.name + '.target',
-                value: block.target,
-            });
-
-            data.push({
-                namespace: 'block',
-                key: block.name + '.timestamp',
-                value: block.timestamp,
-            });
-
-            // data.push({
-            //     namespace: 'block',
-            //     key: 'height.' + block.height,
-            //     value: block.name,
-            // });
-
-            let tmp: any;
-            for (let t: number = 0; t <= block.transactions.length - 1; t++) {
-                data[blockKey]['value']['transactionsNames'].push(block.transactions[t].name);
-
-                if (!block.transactions[t].isCoinbase()) {
-                    data.push({
-                        namespace: 'pool',
-                        key: block.transactions[t].name,
-                        value: DATA_REMOVE_VALUE,
-                    });
-                }
-
-                tmp = {
-                    name: block.transactions[t].name,
-                    num: block.transactions[t].num,
-                    blockName: block.name,
-                    inputs: [],
-                    outputs: [],
-                };
-
-
-                for (let i: number = 0; i <= block.transactions[t].inputs.length - 1; i++) {
-                    tmp.inputs.push({
-                        num: block.transactions[t].inputs[i].num,
-                        outputNum: block.transactions[t].inputs[i].outputNum,
-                        transactionName: block.transactions[t].inputs[i].transactionName,
-                        script: block.transactions[t].inputs[i].script
-                    });
-
-                    if (block.transactions[t].inputs[i].utxo) {
-                        data.push({
-                            namespace: 'utxo',
-                            key: 'output.' + block.transactions[t].inputs[i].utxo?.transactionName + '.' + block.transactions[t].inputs[i].utxo?.outputNum,
-                            value: DATA_REMOVE_VALUE,
-                        });
-                    }
-                }
-
-                for (let o: number = 0; o <= block.transactions[t].outputs.length - 1; o++) {
-                    tmp.outputs.push({
-                        num: block.transactions[t].outputs[o].num,
-                        value: block.transactions[t].outputs[o].value,
-                        script: block.transactions[t].outputs[o].script
-                    });
-
-                    // populate utxo
-                    data.push({
-                        namespace: 'utxo',
-                        key: 'output.' + block.transactions[t].name + '.' + block.transactions[t].outputs[o].num,
-                        value: {
-                            blockHeight: block.height,
-                            transactionName: block.transactions[t].name,
-                            transactionNum: block.transactions[t].num,
-                            outputNum: block.transactions[t].outputs[o].num,
-                            value: block.transactions[t].outputs[o].value,
-                            script: block.transactions[t].outputs[o].script,
-                            // @TODO may not be needed
-                            hashedAddress: sha256x2(block.transactions[t].outputs[o].getScriptAddress()),
-                        },
-                    });
-                }
-
-                data.push({
-                    namespace: 'transaction',
-                    key: block.transactions[t].name,
-                    value: tmp,
-                });
-            }
-
-            // if (block.height > options.chainHeight || options.fork) {
-            //     data.push({
-            //         namespace: 'setting',
-            //         key: settings.LAST_BLOCK_HEIGHT_KEY,
-            //         value: block.height,
-            //     });
-
-            //     data.push({
-            //         namespace: 'setting',
-            //         key: settings.LAST_BLOCK_NAME_KEY,
-            //         value: block.name,
-            //     });
-            // }
-
-            // if (options.fork) {
-            //     for (let f in options.fork) {
-            //         data.push({
-            //             namespace: 'block',
-            //             key: 'height.' + options.fork[f].height,
-            //             value: options.fork[f].name,
-            //         });
-            //         console.log('Update ' + 'height.' + options.fork[f].height + ' with ' + options.fork[f].name)
-            //     }
-            // }
-
-            this.storage.puts(data).then(async function blockPersistedSucces(this: BlockRepo) {
-                console.log('Block in storage ', block.height, block.name)
+            this.storage.puts(this.getBlockData(block)).then(async function blockPersistedSucces(this: BlockRepo) {
+                // console.log('Block in storage ', block.height, block.name)
                 resolve(true);
             }.bind(this)).catch(function blockPersistedFail(error) {
                 console.error(error);
                 resolve(false);
-
             });
+
         }.bind(this));
+    }
+
+    getBlockData = (block: Block): Array<any> => {
+        let data = [];
+
+        // if (options.blockNamesForHeight.indexOf(block.name) === -1) {
+        //     options.blockNamesForHeight.push(block.name);
+        //     data.push({
+        //         namespace: 'block',
+        //         key: 'blocks.height.' + block.height,
+        //         value: options.blockNamesForHeight.join(','),
+        //     });
+        // }
+
+        data.push({
+            namespace: 'block',
+            key: block.name,
+            value: {
+                name: block.name,
+                height: block.height,
+                weight: block.weight,
+                chainWeight: block.chainWeight,
+                target: block.target,
+                nonce: block.nonce,
+                hash: block.hash,
+                prevBlockName: block.prevBlockName,
+                timestamp: block.timestamp,
+                transactionsNames: [],
+            }
+        });
+        const blockKey = data.length - 1;
+
+        if (block.height > 1) {
+            data.push({
+                namespace: 'block',
+                key: block.name + '.prevBlockName',
+                value: block.prevBlockName,
+            });
+            data.push({
+                namespace: 'block',
+                key: block.prevBlockName + '.nextBlockName',
+                value: block.name,
+            });
+        }
+
+        data.push({
+            namespace: 'block',
+            key: block.name + '.chainWeight',
+            value: block.chainWeight,
+        });
+
+        data.push({
+            namespace: 'block',
+            key: block.name + '.height',
+            value: block.height,
+        });
+
+        data.push({
+            namespace: 'block',
+            key: block.name + '.status',
+            value: block.status,
+        });
+
+        data.push({
+            namespace: 'block',
+            key: block.name + '.target',
+            value: block.target,
+        });
+
+        data.push({
+            namespace: 'block',
+            key: block.name + '.timestamp',
+            value: block.timestamp,
+        });
+
+        // data.push({
+        //     namespace: 'block',
+        //     key: 'height.' + block.height,
+        //     value: block.name,
+        // });
+
+        let tmp: any;
+        for (let t: number = 0; t <= block.transactions.length - 1; t++) {
+            data[blockKey]['value']['transactionsNames'].push(block.transactions[t].name);
+
+            if (!block.transactions[t].isCoinbase()) {
+                data.push({
+                    namespace: 'pool',
+                    key: block.transactions[t].name,
+                    value: DATA_REMOVE_VALUE,
+                });
+            }
+
+            tmp = {
+                name: block.transactions[t].name,
+                num: block.transactions[t].num,
+                blockName: block.name,
+                inputs: [],
+                outputs: [],
+            };
+
+
+            for (let i: number = 0; i <= block.transactions[t].inputs.length - 1; i++) {
+                tmp.inputs.push({
+                    num: block.transactions[t].inputs[i].num,
+                    outputNum: block.transactions[t].inputs[i].outputNum,
+                    transactionName: block.transactions[t].inputs[i].transactionName,
+                    script: block.transactions[t].inputs[i].script
+                });
+
+                if (block.transactions[t].inputs[i].utxo) {
+                    data.push({
+                        namespace: 'utxo',
+                        key: 'output.' + block.transactions[t].inputs[i].utxo?.transactionName + '.' + block.transactions[t].inputs[i].utxo?.outputNum,
+                        value: DATA_REMOVE_VALUE,
+                    });
+                }
+            }
+
+            for (let o: number = 0; o <= block.transactions[t].outputs.length - 1; o++) {
+                tmp.outputs.push({
+                    num: block.transactions[t].outputs[o].num,
+                    value: block.transactions[t].outputs[o].value,
+                    script: block.transactions[t].outputs[o].script
+                });
+
+
+                // populate utxo
+                data.push({
+                    namespace: 'utxo',
+                    key: UTXO_FACTORY.createKeyFromOutputObject(block.transactions[t].outputs[o]),
+                    value: UTXO_FACTORY.createArrayFromOutputObject(block.transactions[t].outputs[o]),
+                });
+            }
+
+            data.push({
+                namespace: 'transaction',
+                key: block.transactions[t].name,
+                value: tmp,
+            });
+        }
+
+        // if (block.height > options.chainHeight || options.fork) {
+        //     data.push({
+        //         namespace: 'setting',
+        //         key: settings.LAST_BLOCK_HEIGHT_KEY,
+        //         value: block.height,
+        //     });
+
+        //     data.push({
+        //         namespace: 'setting',
+        //         key: settings.LAST_BLOCK_NAME_KEY,
+        //         value: block.name,
+        //     });
+        // }
+
+        // if (options.fork) {
+        //     for (let f in options.fork) {
+        //         data.push({
+        //             namespace: 'block',
+        //             key: 'height.' + options.fork[f].height,
+        //             value: options.fork[f].name,
+        //         });
+        //         console.log('Update ' + 'height.' + options.fork[f].height + ' with ' + options.fork[f].name)
+        //     }
+        // }
+
+        return data;
     }
 
     updateStatus = (blockName: string, status: BlockStatusType) => {

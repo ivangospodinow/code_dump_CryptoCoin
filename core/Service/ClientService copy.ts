@@ -7,7 +7,7 @@ import Address from "../Address/Address";
 import BlockRepo from "../Repo/BlockRepo";
 import PoolRepo from "../Repo/PoolRepo";
 import BlockValidator from "../Validator/BlockValidator";
-import { sha256x2, getSecondsBetweenDates } from "../tools";
+import { sha256x2 } from "../tools";
 import { IncomingMessage, ServerResponse } from "http";
 import { BLOCK_FACTORY, address1 } from "../../globals";
 import { isNumber } from "util";
@@ -73,14 +73,14 @@ export default class ClientService {
             }.bind(this));
         }.bind(this);
 
-        const miningLoopReque = function() {
+        const miningLoopReque = function () {
             // console.log('Mining requed')
             setTimeout(function miningLoopRequeTimeout() {
                 miningLoop().then(miningLoopReque).catch(miningLoopReque);
             }, 1);
         }
         miningLoop().then(miningLoopReque).catch(miningLoopReque);
-        
+
 
         setInterval(function addQueueClientItems(this: ClientService) {
             if (!this.queueService.hasType(QUEUE_TYPE_SYNC)) {

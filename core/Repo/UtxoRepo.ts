@@ -66,6 +66,7 @@ export default class UtxoRepo {
     //     }.bind(this));
     // }
 
+
     async loadTransactionUtxos(transaction: Transaction): Promise<Transaction> {
         let input: TransactionInput;
         for (input of transaction.inputs) {
@@ -75,5 +76,16 @@ export default class UtxoRepo {
         }
 
         return transaction;
+    }
+
+    async loadBlockUtxos(block: Block): Promise<Block> {
+        let i: any;
+        for (i in block.transactions) {
+            if (!block.transactions[i].isCoinbase()) {
+                block.transactions[i] = await this.loadTransactionUtxos(block.transactions[i]);
+            }
+        }
+
+        return block;
     }
 }

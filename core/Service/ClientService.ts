@@ -7,7 +7,7 @@ import Address from "../Address/Address";
 import BlockRepo from "../Repo/BlockRepo";
 import PoolRepo from "../Repo/PoolRepo";
 import BlockValidator from "../Validator/BlockValidator";
-import { sha256x2, getSecondsBetweenDates, unixTime } from "../tools";
+import { sha256x2, unixTime } from "../tools";
 import { IncomingMessage, ServerResponse } from "http";
 import { BLOCK_FACTORY, address1, TMP_MINING_ADDRESS, getRandomTestAddress, POOL_ITEM_FACTORY } from "../../globals";
 import { isNumber } from "util";
@@ -24,6 +24,7 @@ import ChainRepo from "../Repo/ChainRepo";
 import { resolve } from "path";
 import PoolItem from "../Block/PoolItem";
 import ClientTestDataSeeder from '../../tests/ClientTestDataSeeder';
+import { createNoSubstitutionTemplateLiteral } from "typescript";
 
 export type SyncTarget = { height: number, peer: PeerConstructor };
 
@@ -85,6 +86,8 @@ export default class ClientService {
         const seeder = new ClientTestDataSeeder;
         seeder.start();
 
+        // @TODO must revalidate lastest X block for sanity, unexpected error, database crash, power outage and etc
+
         this.settingsRepo.getPeers().then(function setPeers(this: ClientService, peers: Peers) {
             console.log('Peers loaded', peers.getAll())
             this.hasFullSync = true;
@@ -104,7 +107,7 @@ export default class ClientService {
 
                 //     // @TODO mining adter sync ?
 
-
+                console.log('RUNNING')
             }.bind(this));
             console.log('asfasf')
             // this.startMining();
@@ -157,9 +160,11 @@ export default class ClientService {
                 const tmpAddress = getRandomTestAddress();
                 block = await this.miningService.createNextBlock(tmpAddress);
                 if (!this.blockValidator.isBlockValid(block)) {
-                    console.log(block);
-                    console.log('block invalid');
-                    process.exit();
+                    // console.log(block);
+                    console.log('newly mined block is already invalid, starting over');
+                    setTimeout(minerLoop, 1);
+
+                    return false;
                 }
 
                 console.log('Block candidate ', block.height, block.name)
@@ -234,7 +239,8 @@ export default class ClientService {
                 console.log('Request block ', cleintHeight + 1)
                 blocks = await this.getBlocksFromPeer(newtworkTarget.peer, cleintHeight + 1);
                 if (blocks) {
-                    console.log(blocks[0].transactions[1]);
+                    // console.log(blocks);
+                    // process.exit();
                     let debug = await this.chainRepo.addBlocks(blocks.map(block => block.setStatus(BLOCK_STATUS_INVALID)));
                     console.log('blocks added', debug)
                     cleintHeight = await this.settingsRepo.getLastBlockHeight();

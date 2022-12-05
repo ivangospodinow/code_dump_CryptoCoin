@@ -31,7 +31,7 @@ export type BlockConstructor = {
     chainWeight: number,
     name: string,
     prevBlockName: string,
-    timestamp?: string,
+    timestamp?: number,
     transactionsNames?: Array<string>,
     transactions?: Array<Transaction>,
 };
@@ -46,7 +46,7 @@ export default class Block {
     public hash: number;
     public name: string;
     public prevBlockName: string = '';
-    public timestamp: string;
+    public timestamp?: number;
 
     public transactions: Array<Transaction> = [];
     public transactionsNames: Array<string> = [];
@@ -61,7 +61,7 @@ export default class Block {
         this.hash = data['hash'] || 0;
         this.name = data['name'];
         this.prevBlockName = data['prevBlockName'] || '';
-        this.timestamp = data['timestamp'] || '';
+        this.timestamp = data['timestamp'] || undefined;
         this.transactionsNames = data['transactionsNames'] || [];
         this.transactions = (data['transactions'] || []).map(function blockConstructorSetTransactionRef(this: Block, transaction: Transaction) {
             transaction.block = this;

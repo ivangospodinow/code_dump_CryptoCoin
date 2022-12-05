@@ -28,7 +28,10 @@ app.listen(settings.SERVER_PORT, () => {
 });
 
 
-
+setInterval(function () {
+    const used = process.memoryUsage().heapUsed / 1024 / 1024;
+    console.log(` ----------------- The script uses approximately ${Math.round(used * 100) / 100} MB`);
+}, 10000);
 
 
 // //create a server object:

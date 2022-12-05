@@ -5,7 +5,7 @@ import Transaction from "./Transaction";
 import TransactionInput from "./TransactionInput";
 import TransactionOutput from "./TransactionOutput";
 import settings from '../../settings';
-import { formatAmount, sha256x2, stringToWeight, calcualteMultiplier, getTimestampString } from "../tools";
+import { formatAmount, sha256x2, stringToWeight, calcualteMultiplier } from "../tools";
 import Utxo from "./Utxo";
 
 export default class BlockModel {
@@ -27,7 +27,7 @@ export default class BlockModel {
 
         });
 
-        block.transactions.push(this.createRewardTransaction(address, block))
+        block.transactions.push(this.createRewardTransaction(address, block));
 
         return block;
     }
@@ -42,11 +42,25 @@ export default class BlockModel {
             block.transactions[0].outputs[i].num = i;
         }
 
+
         block.transactions[0].setName(this.createTransactionName(block.transactions[0]));
 
         let counter: number = 0;
-        for (let t in block.transactions) {
-            block.transactions[t].num = counter++;
+        let transaction: Transaction;
+        let input: TransactionInput;
+        let output: TransactionOutput;
+
+        for (transaction of block.transactions) {
+            transaction.block = block;
+            transaction.num = counter++;
+
+            for (input of transaction.inputs) {
+                input.transaction = transaction;
+            }
+
+            for (output of transaction.outputs) {
+                output.transaction = transaction;
+            }
         }
 
         block.setName(this.createBlockName(block));
